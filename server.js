@@ -118,7 +118,7 @@ app.use('/src', (req, res, next) => {
 }, express.static(path.join(__dirname, 'src')));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use((error, _req, res, _next) => failure(res, 400, 'INVALID_REQUEST', 'Invalid JSON request or request too large.'));
-if (require.main === module) app.listen(port, '127.0.0.1', () => {
+if (require.main === module) app.listen(port, '0.0.0.1', () => {
   console.log('Upplai Design Studio: http://localhost:' + port);
   console.log(config.mockMode ? 'Mock Mode — No API Usage' : 'OpenAI live mode: requests only after an explicit generation action.');
 });
