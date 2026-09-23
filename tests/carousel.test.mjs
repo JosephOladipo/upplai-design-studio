@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createCarouselDraft, normalizeCarousel, addSlide, deleteSlide, duplicateSlide, moveSlide, slideFitWarning } from '../src/carousel.js';
+
+test('carousel starts with cover, content slides and a CTA', () => { const draft = createCarouselDraft(); assert.equal(draft.slides.length, 5); assert.equal(draft.slides[0].type, 'cover'); assert.equal(draft.slides.at(-1).type, 'cta'); });
+test('carousel maintains two-slide minimum and ten-slide maximum', () => { let draft = createCarouselDraft(); while (draft.slides.length > 2) draft = deleteSlide(draft, 1); assert.equal(draft.slides.length, 2); for (let i = 0; i < 12; i += 1) draft = addSlide(draft, draft.slides.length - 1); assert.equal(draft.slides.length, 10); });
+test('carousel duplicate, move and order preserve distinct slide IDs', () => { let draft = createCarouselDraft(); const id = draft.slides[1].id; draft = duplicateSlide(draft, 1); assert.notEqual(draft.slides[2].id, id); draft = moveSlide(draft, 2, -1); assert.equal(draft.slides[1].id, draft.slides[1].id); assert.deepEqual(draft.slides.map((slide, index) => slide.order), draft.slides.map((_, index) => index)); });
+test('carousel normalizes theme and warns only when slide text exceeds safe limits', () => { const draft = normalizeCarousel({ slides: [{ type: 'cover', headline: 'x'.repeat(181) }, { type: 'cta' }] }); assert.ok(draft.theme.primaryColor); assert.equal(slideFitWarning(draft.slides[0]), true); assert.equal(slideFitWarning(draft.slides[1]), false); });

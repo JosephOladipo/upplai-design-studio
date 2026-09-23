@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Upplai Design Studio</title>
+  <link rel="stylesheet" href="/styles.css">
+<script type="module" src="/app.js"></script>
+<script type="module" src="/carousel.js"></script>
+<script type="module" src="/navigation.js"></script>
+<script type="module" src="/brand-kit-ui.js"></script>
+<script type="module" src="/calendar.js"></script>
+<script type="module" src="/calendar-table.js"></script>
+</head>
+
+<body>
+
+  <header>
+    <div class="wordmark">
+      Upplai<span> / Design Studio</span>
+    </div>
+
+    <span class="badge">Design Studio</span>
+  </header>
+
+
+  <!-- MAIN APP NAVIGATION -->
+
+  <nav class="studio-nav" aria-label="Studio sections">
+
+    <button
+      id="nav-create"
+      class="studio-nav-button active"
+      type="button"
+      data-section="create"
+      aria-pressed="true"
+    >
+      Create
+    </button>
+
+
+    <button
+      id="nav-calendar"
+      class="studio-nav-button"
+      type="button"
+      data-section="calendar"
+      aria-pressed="false"
+    >
+      Calendar
+    </button>
+    <button id="nav-review" class="studio-nav-button" type="button" data-section="review" aria-pressed="false">Review</button>
+    <button id="nav-publishing" class="studio-nav-button" type="button" aria-pressed="false">Publish</button>
+    <button
+      id="nav-brand"
+      class="studio-nav-button"
+      type="button"
+      data-section="brand"
+      aria-pressed="false"
+    >
+      Brand Kit
+    </button>
+
+  </nav>
+
+
+  <!-- CREATE DESIGN SCREEN -->
+
+  <main
+    id="section-create"
+    class="studio-section active"
+  >
+
+    <section
+      class="panel controls"
+      aria-labelledby="controls-title"
+    >
+
+      <h1 id="controls-title">Create a design</h1>
+
+      <p class="intro">
+        Add your copy, choose a style, and preview.
+      </p>
+      <div class="content-type-toggle" role="group" aria-label="Content type">
+        <button type="button" class="active" data-content-type="single">Single Image</button>
+        <button type="button" data-content-type="carousel">Carousel</button>
+      </div>
+
+      <form id="generator">
+
+        <!-- HEADLINE -->
+
+        <label for="headline">Headline</label>
+
+        <textarea
+          id="headline"
+          name="headline"
+          rows="2"
+          maxlength="180"
+          aria-describedby="headline-limit"
+          placeholder="Your next big idea starts here"
+        ></textarea>
+
+        <p id="headline-limit" class="hint">
+          Up to 180 characters.
+        </p>
+
+
+        <!-- SUPPORTING COPY -->
+
+        <label for="supportingCopy">
+          Supporting Copy
+        </label>
+
+        <textarea
+          id="supportingCopy"
+          name="supportingCopy"
+          rows="3"
+          maxlength="700"
+          aria-describedby="copy-limit"
+          placeholder="Add a little context to your message."
+        ></textarea>
+
+        <p id="copy-limit" class="hint">
+          Up to 700 characters. Keep it brief for a 4:5 layout.
+        </p>
+
+
+        <!-- CTA -->
+
+        <label for="cta">CTA</label>
+
+        <input
+          id="cta"
+          name="cta"
+          maxlength="70"
+          aria-describedby="cta-limit"
+          placeholder="Learn more"
+        >
+
+        <p id="cta-limit" class="hint">
+          Up to 70 characters.
+        </p>
+
+
+        <!-- DESIGN STYLE -->
+
+        <label for="style">
+          Design Style
+        </label>
+
+        <select
+          id="style"
+          name="style"
+          aria-describedby="style-description"
+        ></select>
+
+        <p
+          id="style-description"
+          class="hint"
+        ></p>
+
+
+        <!-- BACKGROUND CONTROLS -->
+
+        <div id="background-controls" hidden>
+
+          <label for="background">
+            Background
+          </label>
+
+          <select
+            id="background"
+            name="background"
+          >
+            <option value="template">
+              Template Default
+            </option>
+
+            <option value="cream">
+              Cream
+            </option>
+
+            <option value="white">
+              White
+            </option>
+
+            <option value="light-blue">
+              Upplai Light Blue
+            </option>
+
+            <option value="blue">
+              Upplai Blue
+            </option>
+
+            <option value="custom">
+              Custom Color
+            </option>
+
+            <option value="image">
+              Upload Image
+            </option>
+          </select>
+
+
+          <div
+            id="custom-background-control"
+            hidden
+          >
+
+            <label for="backgroundColor">
+              Custom Background Color
+            </label>
+
+            <input
+              id="backgroundColor"
+              name="backgroundColor"
+              type="color"
+              value="#f5f1e8"
+            >
+
+          </div>
+
+
+          <div
+            id="background-image-control"
+            hidden
+          >
+
+            <label for="backgroundImage">
+              Background Image
+            </label>
+
+            <input
+              id="backgroundImage"
+              name="backgroundImage"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+            >
+
+            <p class="hint">
+              PNG, JPG or WebP. The image stays in your browser.
+            </p>
+
+          </div>
+
+
+          <div id="image-overlay-controls" hidden>
+
+            <label for="imageOverlay">
+              Image Readability Overlay
+            </label>
+
+            <select
+              id="imageOverlay"
+              name="imageOverlay"
+            >
+              <option value="none">None</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+
+            <div
+              id="overlay-strength-control"
+              hidden
+            >
+
+              <label for="overlayStrength">
+                Overlay Strength
+              </label>
+
+              <select
+                id="overlayStrength"
+                name="overlayStrength"
+              >
+                <option value="low">
+                  Low
+                </option>
+
+                <option
+                  value="medium"
+                  selected
+                >
+                  Medium
+                </option>
+
+                <option value="high">
+                  High
+                </option>
+              </select>
+
+            </div>
+
+          </div>
+
+          <p class="hint">
+            Uploaded images stay local and must be reselected after refresh.
+          </p>
+
+        </div>
+
+
+        <!-- MINIMAL POST -->
+
+        <div id="minimal-controls" hidden>
+
+          <label for="textColor">
+            Text Color
+          </label>
+
+          <input
+            id="textColor"
+            name="textColor"
+            type="color"
+            value="#0b1739"
+          >
+
+          <div id="minimal-typography-fields"></div>
+
+          <p class="hint">
+            Position moves the content block.
+            Alignment controls text inside it.
+            Sizes reduce only when needed to fit.
+          </p>
+
+        </div>
+
+
+        <!-- FREE STYLE -->
+
+        <div id="free-controls" hidden>
+
+          <label for="freeVariation">
+            Variation
+          </label>
+
+          <select
+            id="freeVariation"
+            name="freeVariation"
+          ></select>
+
+          <details id="advanced-typography">
+
+            <summary>
+              Advanced Typography
+            </summary>
+
+            <div id="free-typography-fields"></div>
+
+            <label for="freeCustomText">
+              Text Color
+            </label>
+
+            <select
+              id="freeCustomText"
+              name="freeCustomText"
+            >
+              <option value="off">
+                Auto
+              </option>
+
+              <option value="on">
+                Custom
+              </option>
+            </select>
+
+
+            <div
+              id="free-text-color-control"
+              hidden
+            >
+
+              <label for="freeTextColor">
+                Custom Text Color
+              </label>
+
+              <input
+                id="freeTextColor"
+                name="freeTextColor"
+                type="color"
+                value="#101d30"
+              >
+
+            </div>
+
+          </details>
+
+        </div>
+
+
+        <!-- AI STYLE -->
+
+        <div id="ai-controls" hidden>
+
+          <p
+            id="ai-status"
+            class="hint"
+            role="status"
+          >
+            Checking AI configuration...
+          </p>
+
+        </div>
+
+
+        <!-- LOGO -->
+
+        <div class="form-row">
+
+          <div>
+
+            <label for="logo">
+              Logo
+            </label>
+
+            <select
+              id="logo"
+              name="logo"
+            >
+              <option value="on">
+                On
+              </option>
+
+              <option value="off">
+                Off
+              </option>
+            </select>
+
+          </div>
+
+
+          <div>
+
+            <label for="placement">
+              Logo Placement
+            </label>
+
+            <select
+              id="placement"
+              name="placement"
+            >
+              <option value="auto">
+                Auto
+              </option>
+
+              <option value="top-left">
+                Top Left
+              </option>
+
+              <option value="top-right">
+                Top Right
+              </option>
+
+              <option value="bottom-left">
+                Bottom Left
+              </option>
+
+              <option value="bottom-right">
+                Bottom Right
+              </option>
+            </select>
+
+          </div>
+
+        </div>
+
+
+        <button type="submit">
+          Generate Preview
+        </button>
+
+      </form>
+
+    </section>
+
+
+    <!-- PREVIEW -->
+
+    <section
+      id="create-preview-panel"
+      class="panel preview-panel"
+      aria-labelledby="preview-title"
+    >
+
+      <div class="preview-heading">
+
+        <h2 id="preview-title">
+          Preview
+        </h2>
+
+        <span
+          id="preview-style"
+          class="hint"
+        >
+          Ready when you are
+        </span>
+
+      </div>
+
+
+      <div
+        id="empty-preview"
+        class="empty-preview"
+      >
+
+        Your design will appear here.
+
+        <span>
+          Enter your content and select Generate Preview.
+        </span>
+
+      </div>
+
+
+      <div
+        id="canvas-frame"
+        hidden
+      >
+
+        <div id="canvas-stage">
+
+          <article
+            id="preview"
+            aria-label="Generated design"
+          >
+
+            <div
+              id="preview-logo"
+              class="preview-logo"
+            ></div>
+
+            <div class="design-content">
+
+              <h3 id="preview-headline"></h3>
+
+              <p id="preview-copy"></p>
+
+              <span
+                id="preview-cta"
+                class="preview-cta"
+              ></span>
+
+            </div>
+
+          </article>
+
+        </div>
+
+
+        <p
+          id="fit-warning"
+          role="alert"
+          hidden
+        >
+          Content is too long for this design.
+          Please shorten the headline or supporting copy.
+        </p>
+
+      </div>
+
+
+      <button
+        id="download"
+        type="button"
+        disabled
+      >
+        Download PNG
+      </button>
+
+      <button
+        id="send-to-publish"
+        type="button"
+        hidden
+      >
+        Send to Publish
+      </button>
+
+
+      <button
+        id="regenerate-visual"
+        type="button"
+        hidden
+      >
+        Regenerate Visual
+      </button>
+
+
+      <button
+        id="try-another"
+        type="button"
+        hidden
+      >
+        Try Another Design
+      </button>
+
+
+      <p class="hint preview-note">
+        Fixed 1080 × 1350 output.
+        Shorten content if a fit warning appears.
+        Generate again after editing to update your download.
+      </p>
+
+    </section>
+
+
+    <section id="carousel-builder" class="panel carousel-builder" hidden>
+      <div class="carousel-builder-head"><div><h2>Carousel Builder</h2><p class="hint">Build a connected 4:5 slide sequence.</p></div><button id="carousel-save-calendar" type="button">Save to Calendar</button><button id="carousel-new" type="button">New Carousel</button></div>
+      <div id="carousel-strip" class="carousel-strip" aria-label="Carousel slides"></div><button id="carousel-add" type="button">+ Add Slide</button>
+      <div class="carousel-workspace"><div><div id="carousel-preview" class="carousel-preview" aria-label="Carousel slide preview"></div><p id="carousel-warning" class="fit-warning" hidden>Shorten this slide for the best design.</p><div class="carousel-pagination"><button id="carousel-prev" type="button">Previous</button><button id="carousel-next" type="button">Next</button></div></div>
+      <div class="carousel-editor"><h3 id="carousel-selected-label"></h3><label for="carousel-title">Carousel Title</label><input id="carousel-title" maxlength="180"><label for="carousel-description">Description / Context</label><textarea id="carousel-description" rows="3" maxlength="700"></textarea><label for="carousel-style">Carousel Style</label><select id="carousel-style"><option value="minimal-editorial">Minimal Editorial</option><option value="bold-cards">Bold Cards</option><option value="brand-gradient">Brand Gradient</option></select><label for="carousel-slide-headline">Headline</label><textarea id="carousel-slide-headline" rows="3" maxlength="180"></textarea><label for="carousel-slide-body">Body</label><textarea id="carousel-slide-body" rows="5" maxlength="700"></textarea><div id="carousel-slide-cta-wrap"><label for="carousel-slide-cta">CTA</label><input id="carousel-slide-cta" maxlength="70"></div><div class="carousel-actions"><button id="carousel-left" type="button">Move Left</button><button id="carousel-right" type="button">Move Right</button><button id="carousel-duplicate" type="button">Duplicate</button><button id="carousel-delete" type="button">Delete</button></div><button id="carousel-download-current" type="button">Download Current Slide</button><button id="carousel-download-all" type="button">Download All Slides</button></div></div>
+    </section>
+    <p
+      id="status"
+      class="status"
+      role="status"
+      aria-live="polite"
+    >
+      Ready.
+    </p>
+
+  </main>
+
+
+  <!-- BRAND KIT SCREEN -->
+
+  <main
+    id="section-brand"
+    class="studio-section"
+    hidden
+  >
+
+    <section
+      class="panel brand-kit-panel"
+      aria-labelledby="brand-kit-title"
+    >
+
+      <div class="brand-kit-heading">
+
+        <div>
+
+          <h1 id="brand-kit-title">
+            Brand Kit
+          </h1>
+
+          <p class="intro">
+            Set up your brand once and reuse it across your designs.
+          </p>
+
+        </div>
+
+        <span class="badge">
+          Upplai
+        </span>
+
+      </div>
+
+
+      <form id="brand-kit-form">
+
+        <!-- BRAND IDENTITY -->
+
+        <details open>
+
+          <summary>
+            Brand Identity
+          </summary>
+
+          <div class="brand-kit-group">
+
+            <label for="brandName">
+              Brand Name
+            </label>
+
+            <input
+              id="brandName"
+              name="brandName"
+              maxlength="80"
+              value="Upplai"
+            >
+
+          </div>
+
+        </details>
+
+
+        <!-- LOGOS -->
+
+        <details>
+
+          <summary>
+            Logos
+          </summary>
+
+          <div class="brand-kit-group">
+
+            <label for="brandPrimaryLogo">
+              Primary Logo
+            </label>
+
+            <input
+              id="brandPrimaryLogo"
+              name="brandPrimaryLogo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            >
+
+
+            <label for="brandWhiteLogo">
+              White Logo
+            </label>
+
+            <input
+              id="brandWhiteLogo"
+              name="brandWhiteLogo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            >
+
+
+            <label for="brandDarkLogo">
+              Dark Logo
+            </label>
+
+            <input
+              id="brandDarkLogo"
+              name="brandDarkLogo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            >
+
+
+            <label for="brandIconLogo">
+              Icon / Mark
+            </label>
+
+            <input
+              id="brandIconLogo"
+              name="brandIconLogo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            >
+
+          </div>
+
+        </details>
+
+
+        <!-- COLORS -->
+
+        <details>
+
+          <summary>
+            Brand Colors
+          </summary>
+
+          <div class="brand-kit-group brand-color-grid">
+
+            <div>
+
+              <label for="brandPrimaryColor">
+                Primary
+              </label>
+
+              <div class="brand-color-control"><input id="brandPrimaryColor" name="brandPrimaryColor" type="color" value="#50C4F8" aria-label="Primary color picker"><input id="brandPrimaryHex" name="brandPrimaryHex" type="text" value="#50C4F8" maxlength="7" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Primary hex value"></div>
+
+            </div>
+
+
+            <div>
+
+              <label for="brandSecondaryColor">
+                Secondary
+              </label>
+
+              <div class="brand-color-control"><input id="brandSecondaryColor" name="brandSecondaryColor" type="color" value="#2BB7F7" aria-label="Secondary color picker"><input id="brandSecondaryHex" name="brandSecondaryHex" type="text" value="#2BB7F7" maxlength="7" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Secondary hex value"></div>
+
+            </div>
+
+
+            <div>
+
+              <label for="brandAccentColor">
+                Accent
+              </label>
+
+              <div class="brand-color-control"><input id="brandAccentColor" name="brandAccentColor" type="color" value="#E24C8E" aria-label="Accent color picker"><input id="brandAccentHex" name="brandAccentHex" type="text" value="#E24C8E" maxlength="7" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Accent hex value"></div>
+
+            </div>
+
+
+            <div>
+
+              <label for="brandDarkColor">
+                Text / Dark
+              </label>
+
+              <div class="brand-color-control"><input id="brandDarkColor" name="brandDarkColor" type="color" value="#101D30" aria-label="Dark color picker"><input id="brandDarkHex" name="brandDarkHex" type="text" value="#101D30" maxlength="7" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Dark hex value"></div>
+
+            </div>
+
+
+            <div>
+
+              <label for="brandLightColor">
+                Light
+              </label>
+
+              <div class="brand-color-control"><input id="brandLightColor" name="brandLightColor" type="color" value="#FFFFFF" aria-label="Light color picker"><input id="brandLightHex" name="brandLightHex" type="text" value="#FFFFFF" maxlength="7" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Light hex value"></div>
+
+            </div>
+
+          </div>
+
+        </details>
+
+
+        <!-- TYPOGRAPHY -->
+
+        <details>
+
+          <summary>
+            Typography
+          </summary>
+
+          <div class="brand-kit-group">
+
+            <label for="brandHeadingFont">
+              Heading Font
+            </label>
+
+            <select
+              id="brandHeadingFont"
+              name="brandHeadingFont"
+            >
+              <option value="Inter">
+                Inter
+              </option>
+
+              <option value="Arial">
+                Arial
+              </option>
+
+              <option value="Georgia">
+                Georgia
+              </option>
+
+              <option value="Verdana">
+                Verdana
+              </option>
+
+              <option value="Trebuchet MS">
+                Trebuchet MS
+              </option>
+            </select>
+
+
+            <label for="brandBodyFont">
+              Body Font
+            </label>
+
+            <select
+              id="brandBodyFont"
+              name="brandBodyFont"
+            >
+              <option value="Inter">
+                Inter
+              </option>
+
+              <option value="Arial">
+                Arial
+              </option>
+
+              <option value="Georgia">
+                Georgia
+              </option>
+
+              <option value="Verdana">
+                Verdana
+              </option>
+
+              <option value="Trebuchet MS">
+                Trebuchet MS
+              </option>
+            </select>
+
+          </div>
+
+        </details>
+
+
+        <div class="brand-kit-actions">
+
+          <button
+            id="save-brand-kit"
+            type="button"
+          >
+            Save Brand Kit
+          </button>
+
+          <button
+            id="reset-brand-kit"
+            type="button"
+          >
+            Reset
+          </button>
+
+        </div>
+
+
+        <p
+          id="brand-kit-status"
+          class="hint"
+          role="status"
+          aria-live="polite"
+        >
+          Default Upplai brand loaded.
+        </p>
+
+      </form>
+
+    </section>
+
+  </main>
+
+
+  <!-- CALENDAR SCREEN -->
+
+  <main
+    id="section-calendar"
+    class="studio-section calendar-section"
+    hidden
+  >
+
+    <section
+      class="panel calendar-panel"
+      aria-labelledby="calendar-title"
+    >
+
+      <div class="calendar-heading">
+        <div>
+          <h1 id="calendar-title">Content Calendar</h1>
+          <p class="intro">
+            Upload your content calendar, select posts, and generate designs in bulk.
+          </p>
+        </div>
+      </div>
+
+      <div class="calendar-actions">
+        <button id="add-calendar-post" type="button">+ Add Post</button>
+        <button id="download-calendar-template" type="button">
+          Download CSV Template
+        </button>
+
+        <label class="calendar-upload" for="calendar-csv">
+          <span>Upload CSV</span>
+          <input id="calendar-csv" type="file" accept=".csv,text/csv">
+        </label>
+
+        <button id="clear-calendar" class="calendar-clear" type="button" hidden>
+          Clear Calendar
+        </button>
+      </div>
+
+      <p id="calendar-status" class="hint" role="status" aria-live="polite"></p>
+      <details id="calendar-import-errors" class="calendar-import-errors" hidden>
+        <summary>Rows needing attention</summary>
+        <ul></ul>
+      </details>
+      <p class="hint calendar-template-help">Optional AI guidance accepts friendly wording. Controlled values: Visual Style (Auto, Photorealistic, Editorial, Corporate, Minimal, Abstract, Illustration, 3D, Futuristic); Visual Subject (Auto, Human, Object, Environment, Abstract, Symbolic, Illustration, 3D, Technology, No Main Subject); Composition (Auto, Left, Right, Center, Top, Bottom); Quality (Draft, Standard, Premium).</p>
+
+      <form id="manual-calendar-form" class="calendar-manual-form" hidden>
+        <h2>Add Post</h2><p id="manual-calendar-errors" class="hint" role="alert"></p>
+        <label>Date <input id="manual-date" name="date" type="date" required></label>
+        <label>Headline <textarea id="manual-headline" name="headline" maxlength="180" required></textarea></label>
+        <label>Supporting Copy <textarea id="manual-copy" name="supportingCopy" maxlength="700"></textarea></label>
+        <label>CTA <input id="manual-cta" name="cta" maxlength="70"></label>
+        <label>Content Format <select id="manual-content-format" name="contentFormat"><option value="single-image">Single Image</option><option value="carousel">Carousel</option></select></label><label>Design Method <select id="manual-style" name="style"></select></label>
+        <div id="manual-ai-fields" hidden>
+          <label>Visual Style <select id="manual-visual-style"></select></label><label>Visual Subject <select id="manual-subject"></select></label><label>Composition <select id="manual-composition"></select></label>
+          <label>Visual Direction <textarea id="manual-direction" placeholder="Premium modern workspace, no people, soft daylight, leave negative space on the left."></textarea></label><label>Quality <select id="manual-quality"><option value="draft">Draft</option><option value="standard">Standard</option><option value="premium">Premium</option></select></label>
+        </div>
+        <div class="calendar-form-actions"><button type="submit">Save Post</button><button id="cancel-calendar-post" type="button">Cancel</button></div>
+      </form>
+
+      <div class="calendar-empty" id="calendar-empty">
+        <h2>No calendar imported yet.</h2>
+        <p>
+          Download the template, add your content, then upload the completed CSV.
+        </p>
+      </div>
+
+      <div id="calendar-workspace" hidden>
+        <div id="calendar-summary" class="calendar-summary" aria-live="polite"></div>
+        <div class="calendar-selection" aria-label="Calendar selection controls">
+          <button id="select-all-calendar" type="button">Select All</button>
+          <button id="select-today-calendar" type="button">Select Today</button>
+          <button id="select-ungenerated-calendar" type="button">Select Ungenerated</button>
+          <button id="clear-calendar-selection" type="button">Clear Selection</button>
+        </div>
+        <div class="calendar-generation-placeholder">
+          <div><strong>Today's eligible designs: <span id="calendar-eligible-count">0</span></strong><p>Ready and stale posts can be generated.</p></div>
+          <div><button id="generate-selected-calendar" type="button" disabled>Generate Selected</button><button id="generate-today-calendar" type="button" disabled>Generate Today</button></div>
+        </div>
+        <div class="calendar-table-wrap">
+          <table class="calendar-table">
+            <thead><tr><th scope="col"><span class="visually-hidden">Select</span></th><th scope="col">Date</th><th scope="col">Headline</th><th scope="col">Design Method</th><th scope="col">Format</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+            <tbody id="calendar-table-body"></tbody>
+          </table>
+        </div>
+        <section id="calendar-details" class="calendar-details" hidden aria-live="polite"></section>
+      </div>
+
+    </section>
+
+  </main>
+  <main id="section-review" hidden>
+    <section class="panel calendar-review" aria-labelledby="design-review-title">
+      <div class="calendar-review-heading">
+        <div><h1 id="design-review-title">Review</h1><p class="hint">Review and approve generated content.</p></div>
+        <span id="calendar-review-count" class="hint"></span>
+      </div>
+      <div id="calendar-review-empty" class="calendar-empty"><h2>No generated designs to review yet.</h2><button id="go-to-calendar" type="button">Go to Calendar</button></div>
+      <div id="calendar-review" hidden>
+        <div class="calendar-review-nav">
+          <button id="review-previous" type="button">← Previous</button>
+          <span id="calendar-review-position" class="hint" aria-live="polite"></span>
+          <select id="calendar-review-select" aria-label="Generated design"></select>
+          <button id="review-next" type="button">Next →</button>
+        </div>
+        <div class="calendar-review-workspace">
+          <section class="calendar-review-preview-panel">
+            <div id="calendar-review-preview" class="review-preview-stage" aria-live="polite">Loading design…</div>
+          </section>
+        <aside class="calendar-review-details-panel">
+          <div id="calendar-review-meta"></div>
+          <p id="calendar-review-message" class="hint"></p>
+          <div class="calendar-review-actions">
+            <button id="send-calendar-review" type="button">Send to Publish</button>
+            <button id="download-calendar-review" type="button">Download PNG</button>
+            <button id="regenerate-calendar-review" type="button">Regenerate</button>
+            <button id="edit-calendar-review" type="button">Edit Content</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+
+  <main id="section-publishing" hidden>
+  <section class="panel publishing">
+    <div class="review-workspace-header publishing-header">
+      <div><h1>Publishing</h1><p class="hint">Prepare and schedule your content.</p></div>
+      <button id="publishing-new" type="button">+ New Post</button>
+    </div>
+    <div class="publishing-tabs" role="tablist" aria-label="Publishing views">
+      <button type="button" role="tab" data-publishing-tab="composer" class="active" aria-selected="true">Composer</button>
+      <button type="button" role="tab" data-publishing-tab="scheduled" aria-selected="false">Scheduled</button>
+      <button type="button" role="tab" data-publishing-tab="published" aria-selected="false">Published</button>
+    </div>
+    <div id="publishing-composer" class="publishing-grid">
+      <section class="publishing-post-panel" aria-label="Post media and caption">
+        <div class="publishing-section-label">Post</div>
+        <div id="publishing-media" class="publishing-media">Text-only post</div>
+        <span id="publishing-media-badge" class="publishing-media-badge" hidden></span>
+        <button id="publishing-media-trigger" class="publishing-media-trigger" type="button">Add media</button>
+        <input id="publishing-media-input" type="file" accept="image/png,image/jpeg,image/webp,video/mp4">
+        <label class="publishing-caption-label" for="publishing-caption">Caption<textarea id="publishing-caption" rows="7"></textarea></label>
+      </section>
+      <section class="publishing-settings-panel" aria-label="Publishing settings">
+        <div class="publishing-section-label">Publish</div>
+        <div class="publishing-channels-heading"><span>Channels</span><span id="publishing-status" class="hint">Loading channels…</span></div>
+        <div id="publishing-channels"></div>
+        <div class="publishing-when">
+          <span>When</span>
+          <div id="publishing-mode-control" class="publishing-mode-control" role="group" aria-label="Publish timing">
+            <button type="button" data-publishing-mode="now" class="active" aria-pressed="true">Publish now</button>
+            <button type="button" data-publishing-mode="schedule" aria-pressed="false">Schedule</button>
+          </div>
+          <select id="publishing-mode" aria-hidden="true" tabindex="-1"><option value="now">Publish Now</option><option value="schedule">Schedule</option></select>
+        </div>
+        <div id="publishing-schedule" hidden><label>Date<input id="publishing-date" type="date"></label><label>Time<input id="publishing-time" type="time"></label></div>
+        <p id="publishing-timezone" class="hint"></p>
+        <button id="publishing-prepare" type="button">Publish Now</button>
+        <p id="publishing-result" class="hint" role="status"></p>
+      </section>
+    </div>
+    <section id="publishing-management" hidden>
+      <div class="publishing-management-header">
+        <h2 id="publishing-management-title">Scheduled</h2>
+        <button id="publishing-management-refresh" type="button">Refresh</button>
+      </div>
+      <p id="publishing-management-status" class="hint" role="status"></p>
+      <div id="publishing-management-list" class="publishing-post-list"></div>
+    </section>
+  </section>
+</main>
+<script type="module" src="/publishing.js"></script>
+</body>
+</html>

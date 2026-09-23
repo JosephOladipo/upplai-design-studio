@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { getBufferChannels, BufferError } from '../src/buffer.mjs';
+test('Buffer client uses server-side Bearer auth and normalizes channels', async () => { const calls=[]; const fetcher=async (_url, init) => { calls.push(init); const org = calls.length === 1; return { ok:true, json:async()=> org ? { data:{ account:{ organizations:[{id:'org'}] } } } : { data:{ channels:[{id:'c',service:'linkedin',displayName:'Upplai'}] } } }; }; const channels=await getBufferChannels({apiKey:'secret',fetcher}); assert.deepEqual(channels,[{id:'c',service:'linkedin',name:'Upplai'}]); assert.equal(calls[0].headers.authorization,'Bearer secret'); assert.doesNotMatch(JSON.stringify(channels),/secret/); });
+test('Buffer client safely handles missing config and GraphQL failures', async () => { await assert.rejects(() => getBufferChannels(), error => error instanceof BufferError && error.code === 'NOT_CONFIGURED'); await assert.rejects(() => getBufferChannels({apiKey:'secret',fetcher:async()=>({ok:true,json:async()=>({errors:[{message:'no'}]})})}), error => error.code === 'GRAPHQL'); });

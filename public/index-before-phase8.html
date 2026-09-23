@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Upplai Design Studio</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+
+<body>
+
+  <header>
+    <div class="wordmark">
+      Upplai<span> / Design Studio</span>
+    </div>
+
+    <span class="badge">Phase 8 · Design Studio</span>
+  </header>
+
+  <main>
+
+    <section
+      class="panel controls"
+      aria-labelledby="controls-title"
+    >
+
+      <h1 id="controls-title">Create a design</h1>
+
+      <p class="intro">
+        Add your copy, choose a style, and preview.
+      </p>
+
+      <form id="generator">
+
+        <label for="headline">Headline</label>
+
+        <textarea
+          id="headline"
+          name="headline"
+          rows="2"
+          maxlength="180"
+          aria-describedby="headline-limit"
+          placeholder="Your next big idea starts here"
+        ></textarea>
+
+        <p id="headline-limit" class="hint">
+          Up to 180 characters.
+        </p>
+
+
+        <label for="supportingCopy">
+          Supporting Copy
+        </label>
+
+        <textarea
+          id="supportingCopy"
+          name="supportingCopy"
+          rows="3"
+          maxlength="700"
+          aria-describedby="copy-limit"
+          placeholder="Add a little context to your message."
+        ></textarea>
+
+        <p id="copy-limit" class="hint">
+          Up to 700 characters. Keep it brief for a 4:5 layout.
+        </p>
+
+
+        <label for="cta">CTA</label>
+
+        <input
+          id="cta"
+          name="cta"
+          maxlength="70"
+          aria-describedby="cta-limit"
+          placeholder="Learn more"
+        >
+
+        <p id="cta-limit" class="hint">
+          Up to 70 characters.
+        </p>
+
+
+        <label for="style">
+          Design Style
+        </label>
+
+        <select
+          id="style"
+          name="style"
+          aria-describedby="style-description"
+        ></select>
+
+        <p
+          id="style-description"
+          class="hint"
+        ></p>
+
+
+        <div id="background-controls" hidden>
+
+          <label for="background">
+            Background
+          </label>
+
+          <select
+            id="background"
+            name="background"
+          >
+            <option value="template">
+              Template Default
+            </option>
+
+            <option value="cream">
+              Cream
+            </option>
+
+            <option value="white">
+              White
+            </option>
+
+            <option value="light-blue">
+              Upplai Light Blue
+            </option>
+
+            <option value="blue">
+              Upplai Blue
+            </option>
+
+            <option value="custom">
+              Custom Color
+            </option>
+
+            <option value="image">
+              Upload Image
+            </option>
+          </select>
+
+
+          <div
+            id="custom-background-control"
+            hidden
+          >
+
+            <label for="backgroundColor">
+              Custom Background Color
+            </label>
+
+            <input
+              id="backgroundColor"
+              name="backgroundColor"
+              type="color"
+              value="#f5f1e8"
+            >
+
+          </div>
+
+
+          <div
+            id="background-image-control"
+            hidden
+          >
+
+            <label for="backgroundImage">
+              Background Image
+            </label>
+
+            <input
+              id="backgroundImage"
+              name="backgroundImage"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+            >
+
+            <p class="hint">
+              PNG, JPG or WebP. The image stays in your browser.
+            </p>
+
+          </div>
+
+
+          <div id="image-overlay-controls" hidden>
+
+            <label for="imageOverlay">
+              Image Readability Overlay
+            </label>
+
+            <select
+              id="imageOverlay"
+              name="imageOverlay"
+            >
+              <option value="none">None</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+
+            <div
+              id="overlay-strength-control"
+              hidden
+            >
+              <label for="overlayStrength">
+                Overlay Strength
+              </label>
+
+              <select
+                id="overlayStrength"
+                name="overlayStrength"
+              >
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+
+          </div>
+
+          <p class="hint">
+            Uploaded images stay local and must be reselected after refresh.
+          </p>
+
+        </div>
+
+
+        <div id="minimal-controls" hidden>
+
+          <label for="textColor">
+            Text Color
+          </label>
+
+          <input
+            id="textColor"
+            name="textColor"
+            type="color"
+            value="#0b1739"
+          >
+
+          <div id="minimal-typography-fields"></div>
+
+          <p class="hint">
+            Position moves the content block. Alignment controls text inside it.
+            Sizes reduce only when needed to fit.
+          </p>
+
+        </div>
+
+
+        <div id="free-controls" hidden>
+
+          <label for="freeVariation">
+            Variation
+          </label>
+
+          <select
+            id="freeVariation"
+            name="freeVariation"
+          ></select>
+
+          <details id="advanced-typography">
+
+            <summary>
+              Advanced Typography
+            </summary>
+
+            <div id="free-typography-fields"></div>
+
+            <label for="freeCustomText">
+              Text Color
+            </label>
+
+            <select
+              id="freeCustomText"
+              name="freeCustomText"
+            >
+              <option value="off">Auto</option>
+              <option value="on">Custom</option>
+            </select>
+
+            <div
+              id="free-text-color-control"
+              hidden
+            >
+              <label for="freeTextColor">
+                Custom Text Color
+              </label>
+
+              <input
+                id="freeTextColor"
+                name="freeTextColor"
+                type="color"
+                value="#101d30"
+              >
+            </div>
+
+          </details>
+
+        </div>
+
+
+        <div id="ai-controls" hidden>
+          <p
+            id="ai-status"
+            class="hint"
+            role="status"
+          >
+            Checking AI configuration...
+          </p>
+        </div>
+
+
+        <div class="form-row">
+
+          <div>
+
+            <label for="logo">
+              Logo
+            </label>
+
+            <select
+              id="logo"
+              name="logo"
+            >
+              <option value="on">
+                On
+              </option>
+
+              <option value="off">
+                Off
+              </option>
+            </select>
+
+          </div>
+
+
+          <div>
+
+            <label for="placement">
+              Logo Placement
+            </label>
+
+            <select
+              id="placement"
+              name="placement"
+            >
+              <option value="auto">
+                Auto
+              </option>
+
+              <option value="top-left">
+                Top Left
+              </option>
+
+              <option value="top-right">
+                Top Right
+              </option>
+
+              <option value="bottom-left">
+                Bottom Left
+              </option>
+
+              <option value="bottom-right">
+                Bottom Right
+              </option>
+            </select>
+
+          </div>
+
+        </div>
+
+
+        <button type="submit">
+          Generate Preview
+        </button>
+
+      </form>
+
+    </section>
+
+
+    <section
+      class="panel preview-panel"
+      aria-labelledby="preview-title"
+    >
+
+      <div class="preview-heading">
+
+        <h2 id="preview-title">
+          Preview
+        </h2>
+
+        <span
+          id="preview-style"
+          class="hint"
+        >
+          Ready when you are
+        </span>
+
+      </div>
+
+
+      <div
+        id="empty-preview"
+        class="empty-preview"
+      >
+
+        Your design will appear here.
+
+        <span>
+          Enter your content and select Generate Preview.
+        </span>
+
+      </div>
+
+
+      <div
+        id="canvas-frame"
+        hidden
+      >
+
+        <div id="canvas-stage">
+
+          <article
+            id="preview"
+            aria-label="Generated design"
+          >
+
+            <div
+              id="preview-logo"
+              class="preview-logo"
+            ></div>
+
+            <div class="design-content">
+
+              <h3 id="preview-headline"></h3>
+
+              <p id="preview-copy"></p>
+
+              <span
+                id="preview-cta"
+                class="preview-cta"
+              ></span>
+
+            </div>
+
+          </article>
+
+        </div>
+
+
+        <p
+          id="fit-warning"
+          role="alert"
+          hidden
+        >
+          Content is too long for this design.
+          Please shorten the headline or supporting copy.
+        </p>
+
+      </div>
+
+
+      <button
+        id="download"
+        type="button"
+        disabled
+      >
+        Download PNG
+      </button>
+
+
+      <button
+        id="regenerate-visual"
+        type="button"
+        hidden
+      >
+        Regenerate Visual
+      </button>
+
+
+      <button
+        id="try-another"
+        type="button"
+        hidden
+      >
+        Try Another Design
+      </button>
+
+
+      <p class="hint preview-note">
+        Fixed 1080 × 1350 output.
+        Shorten content if a fit warning appears.
+        Generate again after editing to update your download.
+      </p>
+
+    </section>
+
+
+    <!-- PHASE 8: BRAND KIT -->
+
+    <section
+      class="panel brand-kit-panel"
+      aria-labelledby="brand-kit-title"
+    >
+
+      <div class="brand-kit-heading">
+
+        <div>
+          <h2 id="brand-kit-title">
+            Brand Kit
+          </h2>
+
+          <p class="intro">
+            Manage the brand identity used by your designs.
+          </p>
+        </div>
+
+        <span class="badge">
+          Phase 8
+        </span>
+
+      </div>
+
+
+      <form id="brand-kit-form">
+
+        <label for="brandName">
+          Brand Name
+        </label>
+
+        <input
+          id="brandName"
+          name="brandName"
+          maxlength="80"
+          value="Upplai"
+        >
+
+
+        <h3 class="brand-kit-section-title">
+          Logos
+        </h3>
+
+        <div class="brand-kit-grid">
+
+          <div>
+            <label for="brandPrimaryLogo">
+              Primary Logo
+            </label>
+
+            <input
+              id="brandPrimaryLogo"
+              name="brandPrimaryLogo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            >
+          </div>
+
+
+          <div>
+            <label for="brandWhiteLogo">
+              White Logo
+            </label>
+
+            <input
+              id="brandWhiteLogo"
+              name="brandWhiteLogo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            >
+          </div>
+
+
+          <div>
+            <label for="brandDarkLogo">
+              Dark Logo
+            </label>
+
+            <input
+              id="brandDarkLogo"
+              name="brandDarkLogo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            >
+          </div>
+
+
+          <div>
+            <label for="brandIconLogo">
+              Icon / Mark
+            </label>
+
+            <input
+              id="brandIconLogo"
+              name="brandIconLogo"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            >
+          </div>
+
+        </div>
+
+        <p class="hint">
+          Logo uploads will be connected to saved Brand Kit storage in the next step.
+        </p>
+
+
+        <h3 class="brand-kit-section-title">
+          Colors
+        </h3>
+
+        <div class="brand-kit-grid color-grid">
+
+          <div>
+            <label for="brandPrimaryColor">
+              Primary
+            </label>
+
+            <input
+              id="brandPrimaryColor"
+              name="brandPrimaryColor"
+              type="color"
+              value="#50C4F8"
+            >
+          </div>
+
+
+          <div>
+            <label for="brandSecondaryColor">
+              Secondary
+            </label>
+
+            <input
+              id="brandSecondaryColor"
+              name="brandSecondaryColor"
+              type="color"
+              value="#2BB7F7"
+            >
+          </div>
+
+
+          <div>
+            <label for="brandAccentColor">
+              Accent
+            </label>
+
+            <input
+              id="brandAccentColor"
+              name="brandAccentColor"
+              type="color"
+              value="#E24C8E"
+            >
+          </div>
+
+
+          <div>
+            <label for="brandDarkColor">
+              Text / Dark
+            </label>
+
+            <input
+              id="brandDarkColor"
+              name="brandDarkColor"
+              type="color"
+              value="#101D30"
+            >
+          </div>
+
+
+          <div>
+            <label for="brandLightColor">
+              Light
+            </label>
+
+            <input
+              id="brandLightColor"
+              name="brandLightColor"
+              type="color"
+              value="#FFFFFF"
+            >
+          </div>
+
+        </div>
+
+
+        <h3 class="brand-kit-section-title">
+          Typography
+        </h3>
+
+        <div class="brand-kit-grid">
+
+          <div>
+            <label for="brandHeadingFont">
+              Heading Font
+            </label>
+
+            <select
+              id="brandHeadingFont"
+              name="brandHeadingFont"
+            >
+              <option value="Inter">Inter</option>
+              <option value="Arial">Arial</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Verdana">Verdana</option>
+              <option value="Trebuchet MS">Trebuchet MS</option>
+            </select>
+          </div>
+
+
+          <div>
+            <label for="brandBodyFont">
+              Body Font
+            </label>
+
+            <select
+              id="brandBodyFont"
+              name="brandBodyFont"
+            >
+              <option value="Inter">Inter</option>
+              <option value="Arial">Arial</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Verdana">Verdana</option>
+              <option value="Trebuchet MS">Trebuchet MS</option>
+            </select>
+          </div>
+
+        </div>
+
+
+        <div class="brand-kit-actions">
+
+          <button
+            id="save-brand-kit"
+            type="button"
+          >
+            Save Brand Kit
+          </button>
+
+          <button
+            id="reset-brand-kit"
+            type="button"
+            class="secondary-button"
+          >
+            Reset
+          </button>
+
+        </div>
+
+
+        <p
+          id="brand-kit-status"
+          class="hint"
+          role="status"
+          aria-live="polite"
+        >
+          Default Upplai brand loaded.
+        </p>
+
+      </form>
+
+    </section>
+
+
+    <p
+      id="status"
+      class="status"
+      role="status"
+      aria-live="polite"
+    >
+      Ready.
+    </p>
+
+  </main>
+
+</body>
+</html>
