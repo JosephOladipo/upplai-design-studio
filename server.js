@@ -65,10 +65,21 @@ function checkRequest(req, res) {
   return true;
 }
 function reportError(res, error) {
-  // Never echo upstream errors: they can contain request content or credentials.
-  const timeout = /timeout|timed out/i.test(error.name || '') || error.name === 'AbortError';
-  failure(res, timeout ? 504 : 502, timeout ? 'TIMEOUT' : 'GENERATION_FAILED',
-    timeout ? 'The generation request timed out. No automatic retry was made.' : 'Generation failed or returned invalid data. Check model access/configuration and try again explicitly.');
+  // LOCAL DEBUG ONLY: log the upstream error to the server console.
+  console.error('OPENAI GENERATION ERROR:', error);
+
+  const timeout =
+    /timeout|timed out/i.test(error?.name || '') ||
+    error?.name === 'AbortError';
+
+  failure(
+    res,
+    timeout ? 504 : 502,
+    timeout ? 'TIMEOUT' : 'GENERATION_FAILED',
+    timeout
+      ? 'The generation request timed out. No automatic retry was made.'
+      : 'Generation failed or returned invalid data. Check the local server console for details.'
+  );
 }
 app.post('/api/ai/design-plan', async (req, res) => {
   if (!checkRequest(req, res)) return;

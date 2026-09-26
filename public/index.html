@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Upplai Design Studio</title>
   <link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/editor-workspace.css">
 <script type="module" src="/app.js"></script>
 <script type="module" src="/carousel.js"></script>
 <script type="module" src="/navigation.js"></script>
@@ -565,8 +566,18 @@
       >
         Download PNG
       </button>
+      <button id="edit-design" type="button" hidden>Edit Design</button>
+      <div id="canvas-zoom-controls" class="canvas-zoom-controls" hidden><button id="canvas-fit" type="button">Fit</button><button id="canvas-zoom-out" type="button" aria-label="Zoom out">−</button><output id="canvas-zoom-value">Fit</output><button id="canvas-zoom-in" type="button" aria-label="Zoom in">+</button></div>
+      <section id="local-design-editor" class="local-design-editor" hidden><div class="editor-heading"><h3>Edit Design</h3><button id="reset-design-edits" type="button">Reset Edits</button></div><div id="local-editor-controls"></div></section>
 
-      <button
+
+
+
+
+
+
+
+<button
         id="send-to-publish"
         type="button"
         hidden
@@ -1034,11 +1045,25 @@
           <div id="calendar-review-meta"></div>
           <p id="calendar-review-message" class="hint"></p>
           <div class="calendar-review-actions">
-            <button id="send-calendar-review" type="button">Send to Publish</button>
-            <button id="download-calendar-review" type="button">Download PNG</button>
-            <button id="regenerate-calendar-review" type="button">Regenerate</button>
-            <button id="edit-calendar-review" type="button">Edit Content</button>
-          </div>
+  <button id="send-calendar-review" type="button">Send to Publish</button>
+  <button id="download-calendar-review" type="button">Download PNG</button>
+  <button id="regenerate-calendar-review" type="button">Regenerate</button>
+  <button id="edit-calendar-design" type="button">Edit Design</button>
+  <button id="edit-calendar-review" type="button">Edit Content</button>
+</div>
+
+<div id="calendar-review-design-editor" class="local-design-editor" hidden>
+  <div class="local-editor-heading">
+    <strong>Edit Design</strong>
+    <button id="reset-calendar-design-edits" type="button">Reset Edits</button>
+  </div>
+
+  <p class="hint">
+    Changes happen instantly and do not use AI credits.
+  </p>
+
+  <div id="calendar-review-editor-controls"></div>
+</div>
         </aside>
       </div>
     </section>

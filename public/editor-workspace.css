@@ -1,0 +1,376 @@
+/* ==========================================================
+   UPPLAI DESIGN STUDIO — CANVAS EDITOR WORKSPACE
+   ========================================================== */
+
+/* ---------- Inspector content ---------- */
+
+.local-design-editor .editor-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.local-design-editor .editor-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.local-design-editor .editor-heading button {
+  width: auto;
+  margin: 0;
+  padding: 7px 9px;
+  font-size: 11px;
+}
+
+.canvas-editor-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.canvas-editor-toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.canvas-editor-toolbar button,
+.editor-object-actions button,
+.editor-button-row button,
+.editor-layer-actions button,
+.editor-layer {
+  width: 100%;
+  min-height: 32px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+/* ---------- Layers ---------- */
+
+.editor-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.editor-layers h4 {
+  margin: 2px 0 4px;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .7;
+}
+
+.editor-layer {
+  text-align: left;
+  background: #10161d;
+  color: #e8eef5;
+  border: 1px solid var(--ui-border);
+}
+
+.editor-layer.active {
+  border-color: #19a8e5;
+  background: #162733;
+}
+
+/* ---------- Selected object ---------- */
+
+.editor-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor-object-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-object-heading > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.editor-object-heading strong {
+  font-size: 14px;
+}
+
+.editor-object-heading span {
+  font-size: 10px;
+  opacity: .6;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.editor-object-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+/* ---------- Inspector fields ---------- */
+
+.editor-field {
+  display: grid !important;
+  grid-template-columns: 82px minmax(0, 1fr) !important;
+  gap: 7px !important;
+  align-items: center;
+  margin: 0 !important;
+  font-size: 11px;
+}
+
+.editor-field input,
+.editor-field select,
+.editor-field textarea {
+  width: 100% !important;
+  min-width: 0;
+  margin: 0 !important;
+  box-sizing: border-box;
+}
+
+.editor-field textarea {
+  min-height: 62px;
+  resize: vertical;
+}
+
+.editor-position-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.editor-position-grid .editor-field {
+  grid-template-columns: 35px minmax(0, 1fr) !important;
+}
+
+.editor-button-row,
+.editor-layer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+
+.editor-layer-actions {
+  padding-top: 9px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.editor-empty {
+  font-size: 11px;
+  opacity: .7;
+}
+
+/* ==========================================================
+   DIRECT CANVAS EDITING
+   ========================================================== */
+
+#preview .direct-edit-target {
+  cursor: move;
+}
+
+#preview .direct-edit-target:hover {
+  outline: 2px dashed rgba(25, 168, 229, .65);
+  outline-offset: 3px;
+}
+
+#preview .direct-edit-selected {
+  outline: 3px solid #19a8e5 !important;
+  outline-offset: 4px;
+}
+
+#preview .editor-resize-handle {
+  display: none;
+  position: absolute;
+  right: -12px;
+  bottom: -12px;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 4px solid white;
+  border-radius: 50%;
+  background: #19a8e5;
+  cursor: nwse-resize;
+  z-index: 9999;
+}
+
+#preview .direct-edit-selected > .editor-resize-handle {
+  display: block;
+}
+
+#preview [data-editor-ui="true"] {
+  user-select: none;
+}
+
+/* ==========================================================
+   DESKTOP — CANVAS FIRST
+   ========================================================== */
+
+@media (min-width: 1200px) {
+
+  /*
+   * Editing mode:
+   * collapse the Create form so the artwork becomes dominant.
+   */
+  main:has(#local-design-editor:not([hidden])) {
+    width: auto !important;
+    max-width: none !important;
+    margin-right: 300px !important;
+  }
+
+  #create-view:has(#local-design-editor:not([hidden])) {
+    width: 100% !important;
+    max-width: none !important;
+
+    grid-template-columns:
+      minmax(190px, 220px)
+      minmax(500px, 1fr) !important;
+
+    gap: 14px !important;
+    align-items: start;
+  }
+
+  /*
+   * Compact Create panel.
+   * It remains available, but it no longer dominates editing.
+   */
+  #create-view:has(#local-design-editor:not([hidden]))
+  > section:first-child {
+    padding: 14px !important;
+  }
+
+  #create-view:has(#local-design-editor:not([hidden]))
+  > section:first-child h2 {
+    font-size: 16px;
+  }
+
+  #create-view:has(#local-design-editor:not([hidden]))
+  > section:first-child .hint {
+    font-size: 10px;
+  }
+
+  /*
+   * Main canvas workspace.
+   */
+  #create-preview-panel:has(#local-design-editor:not([hidden])) {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 14px !important;
+    min-width: 0;
+  }
+
+  #create-preview-panel:has(#local-design-editor:not([hidden]))
+  #canvas-frame {
+    width: 100% !important;
+    min-width: 0;
+  }
+
+  #create-preview-panel:has(#local-design-editor:not([hidden]))
+  #canvas-stage {
+    width: 100% !important;
+    min-height: 650px;
+
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+
+    overflow: hidden !important;
+
+    padding: 10px !important;
+    box-sizing: border-box;
+  }
+
+  /*
+   * Right inspector.
+   */
+  #create-preview-panel:has(#local-design-editor:not([hidden]))
+  #local-design-editor {
+    display: block !important;
+
+    position: fixed !important;
+    top: 16px !important;
+    right: 16px !important;
+    left: auto !important;
+
+    width: 270px !important;
+    height: calc(100vh - 32px) !important;
+    max-height: none !important;
+
+    margin: 0 !important;
+    padding: 13px !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    box-sizing: border-box;
+
+    background: #171c22;
+    border: 1px solid var(--ui-border);
+    border-radius: 12px;
+
+    z-index: 1000;
+  }
+
+  #local-design-editor[hidden] {
+    display: none !important;
+  }
+}
+
+/* ==========================================================
+   TABLET / SMALL SCREEN
+   ========================================================== */
+
+@media (max-width: 1199px) {
+
+  #local-design-editor {
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+
+    margin-top: 14px !important;
+    overflow: visible !important;
+  }
+}
+/* ---------- Canvas zoom and canvas-first sizing ---------- */
+.canvas-zoom-controls{display:flex;align-items:center;gap:6px;margin:10px 0}.canvas-zoom-controls button{width:auto;min-width:34px;margin:0;padding:6px 9px}.canvas-zoom-controls output{min-width:52px;text-align:center;font-size:12px;color:var(--grey)}
+@media (min-width:1200px){
+  #section-create:has(#local-design-editor:not([hidden])){grid-template-columns:minmax(190px,220px) minmax(0,1fr)!important;gap:14px!important;max-width:none!important}
+  #section-create:has(#local-design-editor:not([hidden])) > .controls{padding:14px!important}
+  #section-create:has(#local-design-editor:not([hidden])) #create-preview-panel{min-width:0!important;max-width:none!important}
+  #section-create:has(#local-design-editor:not([hidden])) #canvas-stage{height:calc(100vh - 180px)!important;min-height:650px!important;max-height:calc(100vh - 180px)!important;display:flex!important;align-items:flex-start!important;justify-content:center!important;overflow:hidden!important}
+  #section-create:has(#local-design-editor:not([hidden])) #preview{top:12px!important;left:50%!important;transform:translateX(-50%) scale(var(--editor-zoom, .46))!important;transform-origin:top center!important}
+  #section-create:has(#local-design-editor:not([hidden])) #local-design-editor{width:290px!important;right:16px!important}
+}
+@media (max-width:1199px){#canvas-zoom-controls{justify-content:center}#canvas-stage:has(~ #local-design-editor:not([hidden])){min-height:560px!important}}
+
+/* OpenAI Style — keep editable objects above the generated visual */
+#preview.real-template.openai-style {
+  position: relative;
+  isolation: isolate;
+}
+
+#preview.real-template.openai-style .design-content {
+  position: absolute;
+  z-index: 10;
+}
+
+#preview.real-template.openai-style #preview-headline,
+#preview.real-template.openai-style #preview-copy,
+#preview.real-template.openai-style #preview-cta {
+  position: relative;
+  z-index: 11;
+}
+
+#preview.real-template.openai-style #preview-logo {
+  position: absolute;
+  z-index: 12;
+}

@@ -1,6 +1,87 @@
 import { fitLimits } from './typography.js';
+// ===========================================================
+// EDITABLE DESIGN OBJECTS
+// Gives the visual editor a common way to discover and
+// understand objects without hardcoding individual templates.
+// ===========================================================
+
+function markEditable(node, {
+  id,
+  type,
+  label,
+  deletable = true,
+  movable = true,
+  resizable = true,
+  editableText = false
+}) {
+  if (!node) return node;
+
+  node.dataset.editorId = id;
+  node.dataset.editorType = type;
+  node.dataset.editorLabel = label;
+
+  node.dataset.editorDeletable = String(deletable);
+  node.dataset.editorMovable = String(movable);
+  node.dataset.editorResizable = String(resizable);
+  node.dataset.editorText = String(editableText);
+
+  return node;
+}
+
+function markCoreEditableObjects(preview) {
+  markEditable(preview, {
+    id: 'background',
+    type: 'background',
+    label: 'Background',
+    deletable: false,
+    movable: false,
+    resizable: false
+  });
+
+  markEditable(
+    preview.querySelector('#preview-headline'),
+    {
+      id: 'headline',
+      type: 'text',
+      label: 'Headline',
+      editableText: true
+    }
+  );
+
+  markEditable(
+    preview.querySelector('#preview-copy'),
+    {
+      id: 'supporting-copy',
+      type: 'text',
+      label: 'Supporting Copy',
+      editableText: true
+    }
+  );
+
+  markEditable(
+    preview.querySelector('#preview-cta'),
+    {
+      id: 'cta',
+      type: 'button',
+      label: 'CTA',
+      editableText: true
+    }
+  );
+
+  markEditable(
+    preview.querySelector('#preview-logo'),
+    {
+      id: 'logo',
+      type: 'logo',
+      label: 'Logo',
+      editableText: false
+    }
+  );
+}
 // Deterministic templates sharing the existing preview markup and text-length classes.
 export function applyTemplate(preview, value) {
+  markCoreEditableObjects(preview);
+
   preview.querySelector('.template-kicker')?.remove();
   preview.querySelectorAll('.template-extra').forEach(node => node.remove());
 
@@ -45,16 +126,77 @@ export function applyTemplate(preview, value) {
     preview.classList.add('cta-long');
   }
 
+  // PREMIUM EDITORIAL EDITABLE DECORATIONS
+  if (value.style === 'premium-editorial') {
+    const topRule = document.createElement('div');
+    topRule.className =
+      'template-extra template-decoration premium-top-rule';
+
+    markEditable(topRule, {
+      id: 'premium-top-rule',
+      type: 'shape',
+      label: 'Top Rule',
+      editableText: false
+    });
+
+    topRule.setAttribute('aria-hidden', 'true');
+    preview.append(topRule);
+
+    const accentRule = document.createElement('div');
+    accentRule.className =
+      'template-extra template-decoration premium-accent-rule';
+
+    markEditable(accentRule, {
+      id: 'premium-accent-rule',
+      type: 'shape',
+      label: 'Accent Rule',
+      editableText: false
+    });
+
+    accentRule.setAttribute('aria-hidden', 'true');
+    preview.append(accentRule);
+  }
   // PREMIUM EDITORIAL / BOLD STATEMENT
-  if (original) {
+    if (original) {
     const kicker = document.createElement('div');
 
     kicker.className = 'template-kicker';
 
-    kicker.textContent =
-      value.style === 'premium-editorial'
-        ? 'Perspective'
-        : 'Make a statement';
+    markEditable(kicker, {
+      id: 'template-kicker',
+      type: 'text',
+      label:
+        value.style === 'premium-editorial'
+          ? 'Perspective'
+          : 'Kicker',
+      editableText: true
+    });
+
+    if (value.style === 'premium-editorial') {
+      const kickerRule = document.createElement('span');
+
+      kickerRule.className =
+        'template-extra template-decoration premium-kicker-rule';
+
+      markEditable(kickerRule, {
+        id: 'premium-kicker-rule',
+        type: 'shape',
+        label: 'Perspective Rule',
+        editableText: false
+      });
+
+      kickerRule.setAttribute('aria-hidden', 'true');
+
+      kicker.append(kickerRule);
+    }
+
+    kicker.append(
+      document.createTextNode(
+        value.style === 'premium-editorial'
+          ? 'Perspective'
+          : 'Make a statement'
+      )
+    );
 
     content.prepend(kicker);
   }
@@ -101,7 +243,15 @@ export function applyTemplate(preview, value) {
           document.createElement('span');
 
         row.className = 'info-row';
-        row.textContent = line;
+
+markEditable(row, {
+  id: `info-row-${index + 1}`,
+  type: 'text',
+  label: `Infographic Row ${index + 1}`,
+  editableText: true
+});
+
+row.textContent = line;
 
         copy.append(row);
       });
@@ -122,6 +272,12 @@ export function applyTemplate(preview, value) {
 
       stat.className =
         'template-extra stat-value';
+markEditable(stat, {
+  id: 'stat-value',
+  type: 'text',
+  label: 'Stat Value',
+  editableText: true
+});
 
       stat.textContent =
         match[0];
@@ -143,6 +299,13 @@ export function applyTemplate(preview, value) {
 
     shape.className =
       'template-extra product-sculpture';
+
+markEditable(shape, {
+  id: 'product-sculpture',
+  type: 'graphic',
+  label: 'Product Graphic',
+  editableText: false
+});
 
     shape.setAttribute(
       'aria-hidden',

@@ -596,3 +596,38 @@ main,#section-publishing{width:calc(100vw - var(--sidebar-width));max-width:1500
 @media(max-width:760px){.carousel-workspace{grid-template-columns:1fr}.carousel-builder-head{display:block}.carousel-builder-head button{margin-top:.75rem}.carousel-preview{width:min(100%,360px)}.carousel-slide{transform:scale(calc(min(360px, 100vw - 3rem)/1080))}}
 
 .calendar-format-badge{display:inline-flex;padding:.2rem .48rem;border:1px solid color-mix(in srgb,var(--primary) 50%,transparent);border-radius:999px;font-size:.75rem;font-weight:700;white-space:nowrap}.carousel-strip{flex-wrap:nowrap;overflow-x:auto;padding:.2rem 0}.carousel-tab{flex:0 0 auto;width:auto;min-width:76px;padding:.45rem .6rem}.carousel-pagination button,.carousel-actions button{width:auto;padding:.48rem .7rem}.carousel-builder-head{flex-wrap:wrap}
+/* ==========================================================
+   EDITOR CANVAS — FIT FULL 1080x1350 DESIGN
+   ========================================================== */
+
+@media (min-width: 1200px) {
+
+  #create-preview-panel:has(#local-design-editor:not([hidden]))
+  #canvas-stage {
+    position: relative !important;
+    width: 100% !important;
+    height: 650px !important;
+    min-height: 650px !important;
+    overflow: hidden !important;
+  }
+
+  #create-preview-panel:has(#local-design-editor:not([hidden]))
+  #preview {
+    position: absolute !important;
+
+    top: 10px !important;
+    left: 50% !important;
+
+    width: 1080px !important;
+    height: 1350px !important;
+
+   transform:
+  translateX(-50%)
+  scale(var(--editor-zoom, 0.46)) !important;
+
+    transform-origin: top center !important;
+
+    flex: none !important;
+    margin: 0 !important;
+  }
+}

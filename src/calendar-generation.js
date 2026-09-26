@@ -1,7 +1,7 @@
 import { calendarRowToDesignInput } from './design-controller.js';
 import { normalizeStatus, rowsInOrder } from './calendar.js';
 
-const eligible = new Set(['ready', 'stale']);
+const eligible = new Set(['ready', 'stale', 'failed']);
 const replace = (rows, row) => rows.map(item => item.id === row.id ? row : item);
 const compactError = error => String(error?.message || error || 'Generation failed.').replace(/\s+/g, ' ').slice(0, 180);
 

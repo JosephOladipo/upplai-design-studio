@@ -5,6 +5,7 @@ import {
 } from './typography.js';
 
 import { brand } from './brand.js';
+import { loadSavedDesignPrompts, saveDesignPrompt, deleteDesignPrompt } from './saved-design-prompts.js';
 
 import {
   validatePlan,
@@ -17,6 +18,7 @@ export const aiDefaults = {
   aiVisualStyle: 'auto',
   aiSubject: 'auto',
   aiDirection: '',
+  aiDesignPrompt: '',
   aiComposition: 'auto',
   aiQuality: 'draft',
 
@@ -113,6 +115,16 @@ export function setupAIControls() {
   `;
 
   panel.append(direction);
+  const promptLibrary = document.createElement('div');
+  promptLibrary.id = 'ai-prompt-library';
+  promptLibrary.innerHTML = `<label for="aiDesignPrompt">Design Prompt</label><textarea id="aiDesignPrompt" name="aiDesignPrompt" rows="3" maxlength="1200" placeholder="Describe how you want the design to look..."></textarea><label for="aiSavedPrompt">Saved Prompts</label><div class="ai-prompt-actions"><select id="aiSavedPrompt"><option value="">Select saved prompt...</option></select><button id="aiSavePrompt" type="button">Save Prompt</button><button id="aiDeletePrompt" type="button">Delete</button></div>`;
+  panel.append(promptLibrary);
+  const prompt = promptLibrary.querySelector('#aiDesignPrompt'); const saved = promptLibrary.querySelector('#aiSavedPrompt');
+  const refreshPrompts = () => { const selected = saved.value; saved.replaceChildren(new Option('Select saved prompt...', '')); loadSavedDesignPrompts().forEach(item => saved.add(new Option(item.name, item.id))); saved.value = selected; };
+  refreshPrompts();
+  saved.addEventListener('change', () => { const item = loadSavedDesignPrompts().find(entry => entry.id === saved.value); if (item) prompt.value = item.prompt; });
+  promptLibrary.querySelector('#aiSavePrompt').addEventListener('click', () => { if (!prompt.value.trim()) { prompt.focus(); return; } const name = window.prompt('Prompt name:'); if (!name) return; saveDesignPrompt(name, prompt.value); refreshPrompts(); saved.value = loadSavedDesignPrompts().at(-1)?.id || ''; });
+  promptLibrary.querySelector('#aiDeletePrompt').addEventListener('click', () => { if (!saved.value) return; deleteDesignPrompt(saved.value); refreshPrompts(); });
 
   select(
     panel,
@@ -306,6 +318,7 @@ export function activeBrandContext() {
 export function directorInput(value) {
   const custom =
     value.aiSubject === 'custom';
+  const manualPrompt = String(value.aiDesignPrompt || '').trim();
 
   return {
     headline: value.headline,
@@ -325,9 +338,7 @@ export function directorInput(value) {
       value.aiComposition,
 
     customDirection:
-      custom
-        ? value.aiDirection
-        : ''
+      manualPrompt || (custom ? value.aiDirection : '')
   };
 }
 
