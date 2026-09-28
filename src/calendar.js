@@ -1,6 +1,7 @@
 import { designStyles } from './styles.js';
 import { visualStyles, subjectTypes, compositions } from './ai-plan.mjs';
 import { normalizeCarousel, createCarouselDraft } from './carousel.js';
+import { normalizeMultiPage, createMultiPageDraft } from './multi-page.js';
 
 export const CALENDAR_STORAGE_KEY = 'upplai-design-studio:calendar:v1';
 export const CALENDAR_STATUSES = ['ready', 'generating', 'generated', 'failed', 'stale', 'skipped'];
@@ -168,8 +169,9 @@ export function fingerprint(row) {
     supportingCopy: row.supportingCopy,
     cta: row.cta,
     style: row.style,
-    contentFormat: row.contentFormat || 'single-image',
+    contentFormat: ['carousel', 'multi-page'].includes(row.contentFormat) ? row.contentFormat : 'single-image',
     carousel: row.contentFormat === 'carousel' ? normalizeCarousel(row.carousel) : null,
+    multiPage: row.contentFormat === 'multi-page' ? normalizeMultiPage(row.multiPage) : null,
     ai: row.ai
   }));
 }
@@ -187,7 +189,7 @@ function normalizeRow(raw, rowNumber, order, headers) {
   const subjectType = normalizeImportGuidance(getCell(raw, headers, 'subjectType'), subjectTypes, subjectTypeMap, 'auto');
   const composition = normalizeImportComposition(getCell(raw, headers, 'composition'));
   const contentFormat = compact(getCell(raw, headers, 'contentFormat'));
-  const normalizedFormat = contentFormat === 'carousel' ? 'carousel' : 'single-image';
+  const normalizedFormat = contentFormat === 'carousel' ? 'carousel' : contentFormat === 'multi-page' ? 'multi-page' : 'single-image';
   const quality = normalizeImportGuidance(getCell(raw, headers, 'quality'), QUALITY_VALUES, qualityMap, 'draft');
   if (errors.length) return { error: { row: rowNumber, messages: errors } };
   const row = {
@@ -200,6 +202,7 @@ function normalizeRow(raw, rowNumber, order, headers) {
     style,
     contentFormat: normalizedFormat,
     carousel: normalizedFormat === 'carousel' ? createCarouselDraft() : null,
+    multiPage: normalizedFormat === 'multi-page' ? createMultiPageDraft() : null,
     ai: {
       visualStyle: visualStyle.value,
       subjectType: subjectType.value,
@@ -335,10 +338,10 @@ export function createManualRow(input, rows = []) {
   const quality = normalizeEnum(input.quality, QUALITY_VALUES, qualityMap, 'Quality', 'draft');
   for (const item of [visualStyle, subjectType, composition, quality]) if (item.error) errors.push(item.error);
   if (errors.length) return { errors };
-  const contentFormat = input.contentFormat === 'carousel' ? 'carousel' : 'single-image';
+  const contentFormat = input.contentFormat === 'carousel' ? 'carousel' : input.contentFormat === 'multi-page' ? 'multi-page' : 'single-image';
   const order = nextRowOrder(rows);
   const row = { id: `calendar-manual-${hash(`${Date.now()}|${order}|${headline}`)}`, order, date, headline,
-    supportingCopy: display(input.supportingCopy), cta: display(input.cta), style, contentFormat, carousel: contentFormat === 'carousel' ? normalizeCarousel(input.carousel || createCarouselDraft()) : null,
+    supportingCopy: display(input.supportingCopy), cta: display(input.cta), style, contentFormat, carousel: contentFormat === 'carousel' ? normalizeCarousel(input.carousel || createCarouselDraft()) : null, multiPage: contentFormat === 'multi-page' ? normalizeMultiPage(input.multiPage || createMultiPageDraft(input.pageCount || 2)) : null,
     ai: { visualStyle: visualStyle.value, subjectType: subjectType.value, composition: composition.value, direction: display(input.direction), quality: quality.value },
     status: 'ready', generatedAt: null, error: null, resultRef: null };
   row.inputFingerprint = fingerprint(row);

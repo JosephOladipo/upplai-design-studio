@@ -1,8 +1,10 @@
 import { safeImagePrompt } from './ai-plan.mjs';
 import { qualityMap } from './ai-config.cjs';
 
-export async function generateVisual({ config, plan, quality, client }) {
-  const prompt = safeImagePrompt(plan);
+export async function generateVisual({ config, plan, quality, client, fullArtwork = false, copy = {} }) {
+  const prompt = fullArtwork
+    ? [plan.imagePrompt, 'Create a complete flattened 4:5 social-media artwork. Render the supplied post copy as part of the artwork when legible; this output is intentionally not natively editable.', `Headline: ${copy.headline || ''}`, `Supporting copy: ${copy.supportingCopy || ''}`, `CTA: ${copy.cta || ''}`].join('\n')
+    : safeImagePrompt(plan);
   if (config.mockMode) {
     // Fixed local SVG contains no user strings, text, links, scripts or external assets.
     const base = plan.imageStyle === 'futuristic' ? '#101d30' : '#edf5f8';

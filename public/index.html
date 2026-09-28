@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Upplai Design Studio</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css?v=pub-click-02">
 <link rel="stylesheet" href="/editor-workspace.css">
 <script type="module" src="/app.js"></script>
 <script type="module" src="/carousel.js"></script>
+<script type="module" src="/multi-page.js"></script>
 <script type="module" src="/navigation.js"></script>
 <script type="module" src="/brand-kit-ui.js"></script>
 <script type="module" src="/calendar.js"></script>
@@ -21,7 +22,7 @@
       Upplai<span> / Design Studio</span>
     </div>
 
-    <span class="badge">Design Studio</span>
+    <div class="app-header-actions"><button id="app-back" type="button" hidden>← Back</button><span class="badge">Design Studio</span></div>
   </header>
 
 
@@ -83,6 +84,7 @@
       </p>
       <div class="content-type-toggle" role="group" aria-label="Content type">
         <button type="button" class="active" data-content-type="single">Single Image</button>
+        <button type="button" data-content-type="multi-page">Multi-Page</button>
         <button type="button" data-content-type="carousel">Carousel</button>
       </div>
 
@@ -567,6 +569,8 @@
         Download PNG
       </button>
       <button id="edit-design" type="button" hidden>Edit Design</button>
+      <button id="save-calendar-design" type="button" hidden>Save to Calendar</button>
+      <div id="carousel-editor-actions" class="carousel-editor-actions" hidden><button id="carousel-editor-back" type="button">← Back to Carousel</button><button id="carousel-editor-previous" type="button">← Previous</button><output id="carousel-editor-position">Slide 1 of 1</output><button id="carousel-editor-next" type="button">Next →</button><button id="save-carousel-slide" type="button">Save Changes</button></div>
       <div id="canvas-zoom-controls" class="canvas-zoom-controls" hidden><button id="canvas-fit" type="button">Fit</button><button id="canvas-zoom-out" type="button" aria-label="Zoom out">−</button><output id="canvas-zoom-value">Fit</output><button id="canvas-zoom-in" type="button" aria-label="Zoom in">+</button></div>
       <section id="local-design-editor" class="local-design-editor" hidden><div class="editor-heading"><h3>Edit Design</h3><button id="reset-design-edits" type="button">Reset Edits</button></div><div id="local-editor-controls"></div></section>
 
@@ -613,11 +617,23 @@
     </section>
 
 
+    <section id="multi-page-builder" class="panel carousel-builder" hidden aria-label="Multi-page design builder">
+      <div class="carousel-builder-head"><div><h2>Multi-Page Design</h2><p class="hint">Build an ordered set of 2–10 related pages without carousel roles.</p></div><button id="multi-save-calendar" type="button">Save to Calendar</button><button id="multi-send-publishing" type="button">Send to Publishing</button></div>
+      <div class="carousel-ai-options"><label>Pages <select id="multi-page-count"><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label><label>Design Mode <select id="multi-design-mode"><option value="native">Native Design</option><option value="visual-native-text">AI Visual + Native Text</option><option value="full-ai-artwork">Full AI Artwork</option></select></label></div>
+      <label>Overall Design Prompt / Creative Direction<textarea id="multi-direction" rows="2" maxlength="1200" placeholder="Optional shared visual direction for every page."></textarea></label>
+      <button id="multi-generate" type="button">Generate Multi-Page Design</button><p id="multi-page-status" class="status" aria-live="polite"></p>
+      <div id="multi-page-strip" class="carousel-strip" aria-label="Pages"></div>
+      <div class="carousel-workspace"><div><div id="multi-page-preview" class="carousel-preview"></div><div class="carousel-pagination"><button id="multi-prev" type="button">Previous</button><button id="multi-next" type="button">Next</button></div></div><div class="carousel-editor"><h3 id="multi-selected-label"></h3><label>Page Headline<textarea id="multi-headline" rows="3" maxlength="180"></textarea></label><label>Supporting Copy<textarea id="multi-copy" rows="5" maxlength="700"></textarea></label><label>CTA<input id="multi-cta" maxlength="70"></label><label>Template<select id="multi-style"></select></label><div class="carousel-actions"><button id="multi-add" type="button">Add Page</button><button id="multi-duplicate" type="button">Duplicate</button><button id="multi-delete" type="button">Delete</button><button id="multi-left" type="button">Move Left</button><button id="multi-right" type="button">Move Right</button></div><button id="multi-edit-page" type="button">Edit Page</button><button id="multi-download-current" type="button">Download Current Page</button><button id="multi-download-all" type="button">Download All Pages</button></div></div>
+    </section>
+
     <section id="carousel-builder" class="panel carousel-builder" hidden>
-      <div class="carousel-builder-head"><div><h2>Carousel Builder</h2><p class="hint">Build a connected 4:5 slide sequence.</p></div><button id="carousel-save-calendar" type="button">Save to Calendar</button><button id="carousel-new" type="button">New Carousel</button></div>
-      <div id="carousel-strip" class="carousel-strip" aria-label="Carousel slides"></div><button id="carousel-add" type="button">+ Add Slide</button>
-      <div class="carousel-workspace"><div><div id="carousel-preview" class="carousel-preview" aria-label="Carousel slide preview"></div><p id="carousel-warning" class="fit-warning" hidden>Shorten this slide for the best design.</p><div class="carousel-pagination"><button id="carousel-prev" type="button">Previous</button><button id="carousel-next" type="button">Next</button></div></div>
-      <div class="carousel-editor"><h3 id="carousel-selected-label"></h3><label for="carousel-title">Carousel Title</label><input id="carousel-title" maxlength="180"><label for="carousel-description">Description / Context</label><textarea id="carousel-description" rows="3" maxlength="700"></textarea><label for="carousel-style">Carousel Style</label><select id="carousel-style"><option value="minimal-editorial">Minimal Editorial</option><option value="bold-cards">Bold Cards</option><option value="brand-gradient">Brand Gradient</option></select><label for="carousel-slide-headline">Headline</label><textarea id="carousel-slide-headline" rows="3" maxlength="180"></textarea><label for="carousel-slide-body">Body</label><textarea id="carousel-slide-body" rows="5" maxlength="700"></textarea><div id="carousel-slide-cta-wrap"><label for="carousel-slide-cta">CTA</label><input id="carousel-slide-cta" maxlength="70"></div><div class="carousel-actions"><button id="carousel-left" type="button">Move Left</button><button id="carousel-right" type="button">Move Right</button><button id="carousel-duplicate" type="button">Duplicate</button><button id="carousel-delete" type="button">Delete</button></div><button id="carousel-download-current" type="button">Download Current Slide</button><button id="carousel-download-all" type="button">Download All Slides</button></div></div>
+      <section class="carousel-content-creator" aria-label="Carousel content generation"><div><h3>Create carousel content</h3><p class="hint">Choose AI Prompt, Manual, or Import. AI generation starts only when you click Generate Carousel.</p></div><div class="carousel-creation-modes" role="group" aria-label="Carousel creation mode"><button type="button" class="active" data-carousel-creation="prompt">AI Prompt</button><button type="button" data-carousel-creation="manual">Manual</button><button type="button" data-carousel-creation="import">Import</button></div><div id="carousel-prompt-workspace"><label>Carousel Prompt<textarea id="carousel-ai-prompt" rows="6" maxlength="1600" placeholder="Create a 7-slide educational carousel for job seekers explaining why qualified candidates still get rejected. Start with a provocative hook, explain four hidden resume problems with practical examples, give an action checklist, and finish with a soft CTA."></textarea></label><div class="saved-prompt-controls" aria-label="Saved Carousel Prompts"><strong>Saved Carousel Prompts</strong><select id="carousel-prompt-select"><option value="">Select Saved Prompt</option></select><button id="carousel-prompt-save" type="button">Save Current Prompt</button><button id="carousel-prompt-rename" type="button">Rename</button><button id="carousel-prompt-duplicate" type="button">Duplicate</button><button id="carousel-prompt-delete" type="button">Delete</button></div></div><details class="carousel-advanced-controls"><summary>Optional advanced controls</summary><label>Topic / Idea<textarea id="carousel-ai-topic" rows="3" maxlength="1600" placeholder="Optional when your prompt already explains the topic"></textarea></label></details><div class="carousel-ai-options"><label>Slide Count<select id="carousel-ai-count"><option value="3">3</option><option value="5" selected>5</option><option value="7">7</option><option value="10">10</option></select></label><label>Carousel Design Mode<select id="carousel-ai-render-mode"><option value="native" selected>Native Design</option><option value="visual-native-text">AI Visual + Native Text</option><option value="full-ai-artwork">Full AI Artwork</option></select></label><label>Content Goal<select id="carousel-ai-goal"><option value="educate">Educate</option><option value="explain">Explain</option><option value="tips">Tips</option><option value="story">Story</option><option value="promote">Promote</option><option value="thought-leadership">Thought Leadership</option></select></label></div><label>Optional AI Direction<textarea id="carousel-ai-direction" rows="2" maxlength="600" placeholder="Target job seekers. Make the hook stronger. Keep each slide concise."></textarea></label><div class="carousel-ai-actions"><button id="carousel-ai-generate" type="button">✨ Generate Carousel</button><button id="carousel-ai-manual" type="button">Start Manually</button><button id="carousel-import-open" type="button">Import Carousel</button></div><div id="carousel-import-panel" class="carousel-import-panel" hidden><input id="carousel-import-input" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><div class="carousel-import-actions"><button id="carousel-import-choose" type="button">Choose Images</button><button id="carousel-import-confirm" type="button" disabled>Import Carousel</button></div><div id="carousel-import-list" class="carousel-import-list"></div><p class="hint">Imported images are flattened base visuals. Add new editable Upplai elements above them in Edit Slide.</p></div><p id="carousel-ai-status" class="hint" role="status"></p></section>
+      <div class="carousel-builder-head"><div><h2>Carousel Builder</h2><p id="carousel-draft-state" class="hint">New carousel · not yet saved</p></div><button id="carousel-save-draft" type="button">Save Draft</button><button id="carousel-save-calendar" type="button">Save to Calendar</button><button id="carousel-send-publishing" type="button">Send to Publishing</button><button id="carousel-new" type="button">New Carousel</button></div>
+      <section class="carousel-saved-library" aria-labelledby="carousel-saved-heading"><div><h3 id="carousel-saved-heading">Saved Carousels</h3><p class="hint">Continue a saved content project or reuse its structure.</p></div><div id="carousel-saved-list" class="carousel-saved-list"></div></section>
+      <section class="carousel-template-library" aria-labelledby="carousel-template-heading"><div><h3 id="carousel-template-heading">Carousel Templates</h3><p class="hint">Choose a reusable visual system. Your copy stays in place.</p></div><div id="carousel-template-cards" class="carousel-template-cards"></div></section>
+      <div id="carousel-strip" class="carousel-strip" aria-label="Carousel slides"></div><div class="carousel-add-options"><button id="carousel-add" type="button">+ Add Template Slide</button><button id="carousel-add-upload" type="button">Upload Image Slide</button></div>
+      <div class="carousel-workspace"><div><div id="carousel-preview" class="carousel-preview" aria-label="Carousel slide preview"></div><div id="carousel-zoom-controls" class="carousel-zoom-controls"><button id="carousel-fit" type="button">Fit</button><button id="carousel-zoom-out" type="button" aria-label="Zoom out">−</button><output id="carousel-zoom-value">Fit</output><button id="carousel-zoom-in" type="button" aria-label="Zoom in">+</button></div><p id="carousel-warning" class="fit-warning" hidden>Shorten this slide for the best design.</p><div class="carousel-pagination"><button id="carousel-prev" type="button">Previous</button><button id="carousel-next" type="button">Next</button></div></div>
+      <div class="carousel-editor"><h3 id="carousel-selected-label"></h3><label for="carousel-title">Carousel Title</label><input id="carousel-title" maxlength="180"><label for="carousel-description">Description / Context</label><textarea id="carousel-description" rows="3" maxlength="700"></textarea><label for="carousel-style">Carousel Style</label><select id="carousel-style"><option value="minimal-editorial">Minimal Editorial</option><option value="swipe-guide">Swipe Guide</option><option value="numbered-steps">Numbered Steps</option><option value="bold-cards">Bold Cards</option><option value="modern-magazine">Modern Magazine</option><option value="progress-story">Progress Story</option><option value="data-insight">Data / Insight</option><option value="clean-brand">Clean Brand</option><option value="brand-gradient">Brand Gradient</option></select><label for="carousel-slide-headline">Headline</label><textarea id="carousel-slide-headline" rows="3" maxlength="180"></textarea><label for="carousel-slide-body">Body</label><textarea id="carousel-slide-body" rows="5" maxlength="700"></textarea><div id="carousel-slide-cta-wrap"><label for="carousel-slide-cta">CTA</label><input id="carousel-slide-cta" maxlength="70"></div><div class="carousel-actions"><button id="carousel-left" type="button">Move Left</button><button id="carousel-right" type="button">Move Right</button><button id="carousel-duplicate" type="button">Duplicate</button><button id="carousel-delete" type="button">Delete</button></div><button id="carousel-edit-slide" type="button">Edit Slide</button><button id="carousel-download-current" type="button">Download Current Slide</button><button id="carousel-download-all" type="button">Download All Slides</button></div></div>
     </section>
     <p
       id="status"
@@ -984,7 +1000,7 @@
         <label>Headline <textarea id="manual-headline" name="headline" maxlength="180" required></textarea></label>
         <label>Supporting Copy <textarea id="manual-copy" name="supportingCopy" maxlength="700"></textarea></label>
         <label>CTA <input id="manual-cta" name="cta" maxlength="70"></label>
-        <label>Content Format <select id="manual-content-format" name="contentFormat"><option value="single-image">Single Image</option><option value="carousel">Carousel</option></select></label><label>Design Method <select id="manual-style" name="style"></select></label>
+        <label>Content Format <select id="manual-content-format" name="contentFormat"><option value="single-image">Single Image</option><option value="multi-page">Multi-Page</option><option value="carousel">Carousel</option></select></label><label>Design Method <select id="manual-style" name="style"></select></label>
         <div id="manual-ai-fields" hidden>
           <label>Visual Style <select id="manual-visual-style"></select></label><label>Visual Subject <select id="manual-subject"></select></label><label>Composition <select id="manual-composition"></select></label>
           <label>Visual Direction <textarea id="manual-direction" placeholder="Premium modern workspace, no people, soft daylight, leave negative space on the left."></textarea></label><label>Quality <select id="manual-quality"><option value="draft">Draft</option><option value="standard">Standard</option><option value="premium">Premium</option></select></label>
@@ -1000,6 +1016,8 @@
       </div>
 
       <div id="calendar-workspace" hidden>
+        <div class="calendar-library-controls"><input id="calendar-library-search" type="search" placeholder="Search content"><select id="calendar-library-status"><option value="">All statuses</option><option value="ready">Ready</option><option value="generated">Generated</option><option value="failed">Failed</option></select><select id="calendar-library-format"><option value="">All content types</option><option value="single-image">Single</option><option value="multi-page">Multi-Page</option><option value="carousel">Carousel</option></select><select id="calendar-library-date"><option value="">All dates</option><option value="today">Today</option><option value="upcoming">Upcoming</option><option value="past">Past / Library</option><option value="archived">Archived</option></select><select id="calendar-library-folder"><option value="">All folders</option></select><button id="calendar-add-folder" type="button">+ Folder</button></div>
+        <div id="calendar-folder-list" class="calendar-folder-list"></div>
         <div id="calendar-summary" class="calendar-summary" aria-live="polite"></div>
         <div class="calendar-selection" aria-label="Calendar selection controls">
           <button id="select-all-calendar" type="button">Select All</button>
@@ -1011,7 +1029,7 @@
           <div><strong>Today's eligible designs: <span id="calendar-eligible-count">0</span></strong><p>Ready and stale posts can be generated.</p></div>
           <div><button id="generate-selected-calendar" type="button" disabled>Generate Selected</button><button id="generate-today-calendar" type="button" disabled>Generate Today</button></div>
         </div>
-        <div class="calendar-table-wrap">
+        <p id="calendar-content-group" class="hint"></p><div class="calendar-table-wrap">
           <table class="calendar-table">
             <thead><tr><th scope="col"><span class="visually-hidden">Select</span></th><th scope="col">Date</th><th scope="col">Headline</th><th scope="col">Design Method</th><th scope="col">Format</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
             <tbody id="calendar-table-body"></tbody>
@@ -1040,6 +1058,12 @@
         <div class="calendar-review-workspace">
           <section class="calendar-review-preview-panel">
             <div id="calendar-review-preview" class="review-preview-stage" aria-live="polite">Loading design…</div>
+            <div id="carousel-review-controls" class="carousel-review-controls" hidden>
+              <button id="carousel-review-previous" type="button">← Slide</button>
+              <span id="carousel-review-position" class="hint"></span>
+              <button id="carousel-review-next" type="button">Slide →</button>
+            </div>
+            <div id="carousel-review-strip" class="carousel-review-strip" hidden></div>
           </section>
         <aside class="calendar-review-details-panel">
           <div id="calendar-review-meta"></div>
@@ -1052,18 +1076,6 @@
   <button id="edit-calendar-review" type="button">Edit Content</button>
 </div>
 
-<div id="calendar-review-design-editor" class="local-design-editor" hidden>
-  <div class="local-editor-heading">
-    <strong>Edit Design</strong>
-    <button id="reset-calendar-design-edits" type="button">Reset Edits</button>
-  </div>
-
-  <p class="hint">
-    Changes happen instantly and do not use AI credits.
-  </p>
-
-  <div id="calendar-review-editor-controls"></div>
-</div>
         </aside>
       </div>
     </section>
@@ -1086,14 +1098,20 @@
         <div class="publishing-section-label">Post</div>
         <div id="publishing-media" class="publishing-media">Text-only post</div>
         <span id="publishing-media-badge" class="publishing-media-badge" hidden></span>
-        <button id="publishing-media-trigger" class="publishing-media-trigger" type="button">Add media</button>
-        <input id="publishing-media-input" type="file" accept="image/png,image/jpeg,image/webp,video/mp4">
-        <label class="publishing-caption-label" for="publishing-caption">Caption<textarea id="publishing-caption" rows="7"></textarea></label>
+        <div id="publishing-media-dropzone" class="publishing-media-dropzone" role="button" tabindex="0" aria-label="Choose media files"><strong>Add Media</strong><span>Upload images or video</span><button id="publishing-media-trigger" class="publishing-media-trigger" type="button">Choose Files</button><small>PNG, JPG, WebP, MP4, MOV, WebM</small></div>
+        <input id="publishing-media-input" type="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm">
+        <section class="publishing-copy-assistant" aria-label="Caption assistant">
+          <div class="publishing-caption-heading"><span>Caption</span><div class="publishing-mode-control caption-mode" role="group" aria-label="Caption mode"><button id="caption-mode-generic" type="button" class="active">One Caption for All</button><button id="caption-mode-platform" type="button">Platform-Specific</button></div></div>
+          <label id="publishing-generic-caption-label" class="publishing-caption-label" for="publishing-caption"><span>Caption</span><textarea id="publishing-caption" rows="7"></textarea></label>
+          <div id="publishing-platform-captions" hidden></div>
+          <details class="publishing-ai-assistant"><summary>✨ AI Assistant</summary><label>Caption Instructions<textarea id="publishing-ai-instruction" rows="3" maxlength="600" placeholder="Optional direction, audience, or constraints"></textarea></label><div class="saved-prompt-controls" aria-label="Saved Caption Prompts"><strong>Saved Caption Prompts</strong><select id="caption-prompt-select"><option value="">Select Saved Prompt</option></select><button id="caption-prompt-save" type="button">Save Current Prompt</button><button id="caption-prompt-rename" type="button">Rename</button><button id="caption-prompt-duplicate" type="button">Duplicate</button><button id="caption-prompt-delete" type="button">Delete</button></div><div class="publishing-ai-controls"><label>Tone<select id="publishing-ai-tone"><option value="">Default</option><option value="professional">Professional</option><option value="conversational">Conversational</option><option value="bold">Bold</option><option value="educational">Educational</option><option value="friendly">Friendly</option></select></label><label>Length<select id="publishing-ai-length"><option value="short">Short</option><option value="medium" selected>Medium</option><option value="long">Long</option></select></label><label>Hashtags<select id="publishing-ai-hashtags"><option value="none">None</option><option value="few">Few</option><option value="more">More</option></select></label></div><div class="publishing-ai-actions"><button id="publishing-ai-generic" type="button">✨ Generate with AI</button><button id="publishing-ai-copy" type="button" hidden>Use Generic Caption for All</button><button id="publishing-ai-platform" type="button" hidden>Generate / Regenerate All Platform Variations</button></div><p id="publishing-ai-status" class="hint" role="status"></p><div id="publishing-ai-results"></div></details>
+        </section>
+        <section class="publishing-alt-text" aria-label="Accessibility alt text"><div class="publishing-caption-heading"><span>Alt Text</span><div class="publishing-mode-control caption-mode" role="group" aria-label="Alt text mode"><button id="alt-mode-generic" type="button" class="active">One Alt Text for All</button><button id="alt-mode-platform" type="button">Platform-Specific</button></div></div><p class="hint">Describe the important visual content for accessibility. Buffer currently receives captions only; accessibility notes remain with this publishing draft.</p><label id="publishing-generic-alt-label" for="publishing-alt-text">Alt Text<textarea id="publishing-alt-text" rows="3" maxlength="500"></textarea></label><div id="publishing-platform-alt-text" hidden></div><button id="publishing-ai-alt" type="button">✨ Generate Alt Text</button><p id="publishing-alt-status" class="hint" role="status"></p></section>
       </section>
       <section class="publishing-settings-panel" aria-label="Publishing settings">
         <div class="publishing-section-label">Publish</div>
-        <div class="publishing-channels-heading"><span>Channels</span><span id="publishing-status" class="hint">Loading channels…</span></div>
-        <div id="publishing-channels"></div>
+        <div class="publishing-channels-heading"><span>Channels</span><span id="publishing-status" class="hint">Loading channels…</span><button id="publishing-retry-channels" type="button" hidden>Retry</button></div>
+        <div id="publishing-connections" class="publishing-connections" aria-live="polite"></div>        <div id="publishing-channels"></div>
         <div class="publishing-when">
           <span>When</span>
           <div id="publishing-mode-control" class="publishing-mode-control" role="group" aria-label="Publish timing">
@@ -1118,6 +1136,6 @@
     </section>
   </section>
 </main>
-<script type="module" src="/publishing.js"></script>
+<script type="module" src="/publishing.js?v=pub-click-02"></script>
 </body>
 </html>

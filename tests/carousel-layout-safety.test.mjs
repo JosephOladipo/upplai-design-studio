@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { carouselStyles, normalizeCarousel } from '../src/carousel.js';
+test('all carousel cover and CTA data stay content-driven and CTA decorations are suppressed', () => { const source = fs.readFileSync(new URL('../public/carousel.js', import.meta.url), 'utf8'); const css = fs.readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8'); assert.equal(source.includes('START HERE'), false); assert.equal(source.includes('KEEP GOING'), false); assert.match(css, /carousel-cta\.carousel-bold-cards::after.*display:none/); for (const template of carouselStyles) { const draft = normalizeCarousel({ style: template.id, slides: [{ type: 'cover', headline: 'Qualified but skipped?', body: 'Your experience may be strong.' }, { type: 'cta', headline: 'Make your value obvious', body: 'Tailor your resume to the role.', cta: 'Review your resume before you apply.' }] }); assert.equal(draft.slides[1].cta, 'Review your resume before you apply.'); } });

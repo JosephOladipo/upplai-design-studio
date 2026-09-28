@@ -28,11 +28,11 @@ export function calendarResultRef(rowId) { return `calendar-result:${rowId}`; }
 
 export async function saveCalendarAsset(resultRef, result) {
   if (!resultRef) throw new Error('Generated result is unavailable for review storage.');
-  const carousel = result?.type === 'carousel';
-  if (!carousel && !result?.preview?.outerHTML) throw new Error('Generated preview is unavailable for review storage.');
-  if (carousel && !Array.isArray(result.slides)) throw new Error('Generated carousel slides are unavailable for review storage.');
-  const asset = carousel ? { id: resultRef, type: 'carousel', width: result.width, height: result.height, style: result.style || '', slides: result.slides.map(slide => ({ slideId: slide.slideId, order: slide.order, type: slide.type, html: slide.preview?.outerHTML || '' })), updatedAt: new Date().toISOString() } : { id: resultRef, type: 'single-image', html: result.preview.outerHTML, style: result.style || '', updatedAt: new Date().toISOString() };
-  if (carousel && asset.slides.some(slide => !slide.html)) throw new Error('Generated carousel slide is unavailable for review storage.');
+  const multi = result?.type === 'carousel' || result?.type === 'multi-page';
+  if (!multi && !result?.preview?.outerHTML) throw new Error('Generated preview is unavailable for review storage.');
+  if (multi && !Array.isArray(result.slides)) throw new Error('Generated multi-page result is unavailable for review storage.');
+  const asset = multi ? { id: resultRef, type: result.type, width: result.width, height: result.height, style: result.style || '', slides: result.slides.map(slide => ({ slideId: slide.slideId, order: slide.order, type: slide.type, html: slide.preview?.outerHTML || '' })), updatedAt: new Date().toISOString() } : { id: resultRef, type: 'single-image', html: result.preview.outerHTML, style: result.style || '', updatedAt: new Date().toISOString() };
+  if (multi && asset.slides.some(slide => !slide.html)) throw new Error('Generated page is unavailable for review storage.');
   await transact('readwrite', store => store.put(asset));
   return asset.id;
 }
@@ -45,4 +45,28 @@ export async function loadCalendarAsset(resultRef) {
 export async function removeCalendarAsset(resultRef) {
   if (!resultRef) return;
   await transact('readwrite', store => store.delete(resultRef));
+}
+
+export async function saveCarouselImportAsset(id, dataUrl, metadata = {}) {
+  if (!id || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) throw new Error('Imported image data is unavailable.');
+  await transact('readwrite', store => store.put({ id, type: 'carousel-import', dataUrl, ...metadata, updatedAt: new Date().toISOString() }));
+  return id;
+}
+
+export async function loadCarouselImportAsset(id) {
+  const asset = await loadCalendarAsset(id);
+  return asset?.type === 'carousel-import' ? asset : null;
+}
+
+// Carousel AI visuals share the existing IndexedDB store. Draft metadata keeps
+// only the reference, so localStorage never receives a generated image URL.
+export async function saveCarouselVisualAsset(id, dataUrl, metadata = {}) {
+  if (!id || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) throw new Error('Generated carousel visual is unavailable.');
+  await transact('readwrite', store => store.put({ id, type: 'carousel-visual', dataUrl, ...metadata, updatedAt: new Date().toISOString() }));
+  return id;
+}
+
+export async function loadCarouselVisualAsset(id) {
+  const asset = await loadCalendarAsset(id);
+  return asset?.type === 'carousel-visual' ? asset : null;
 }

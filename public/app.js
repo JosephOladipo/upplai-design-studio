@@ -7,15 +7,18 @@ import { designStyles } from '/src/styles.js';
 import { loadState, saveState } from '/src/storage.js';
 import { applyTemplate, fitTemplate } from '/src/templates.js';
 import { downloadPng } from '/src/export.js';
-import { saveCalendarAsset } from '/src/calendar-assets.js';
+import { calendarResultRef, saveCalendarAsset, loadCalendarAsset } from '/src/calendar-assets.js';
+import { loadCalendar, saveCalendar } from '/src/calendar.js';
 import { generateDesign, normalizeDesignInput } from '/src/design-controller.js';
+import { beginLocalEdits, setupLocalEditor } from '/src/local-editor.js';
+import { showProcessing, hideProcessing } from '/src/processing.js';
 
 applyBrand();
 setupAIControls();
 
 const form = document.querySelector('#generator');
 const status = document.querySelector('#status');
-const preview = document.querySelector('#preview');
+let preview = document.querySelector('#preview');
 const frame = document.querySelector('#canvas-frame');
 const stage = document.querySelector('#canvas-stage');
 const warning = document.querySelector('#fit-warning');
@@ -28,6 +31,22 @@ let aiDesign = null;
 let aiBusy = false;
 let aiConfiguration = null;
 const regenerate = document.querySelector('#regenerate-visual');
+const editDesign = document.querySelector('#edit-design');
+const saveCalendarDesign = document.querySelector('#save-calendar-design');
+const saveCarouselSlide = document.querySelector('#save-carousel-slide');
+const carouselEditorActions = document.querySelector('#carousel-editor-actions');
+const carouselEditorBack = document.querySelector('#carousel-editor-back');
+const carouselEditorPrevious = document.querySelector('#carousel-editor-previous');
+const carouselEditorNext = document.querySelector('#carousel-editor-next');
+const carouselEditorPosition = document.querySelector('#carousel-editor-position');
+const localDesignEditor = document.querySelector('#local-design-editor');
+const localEditorControls = document.querySelector('#local-editor-controls');
+const resetDesignEdits = document.querySelector('#reset-design-edits');
+const canvasZoomControls = document.querySelector('#canvas-zoom-controls');
+const canvasFit = document.querySelector('#canvas-fit');
+const canvasZoomOut = document.querySelector('#canvas-zoom-out');
+const canvasZoomIn = document.querySelector('#canvas-zoom-in');
+const canvasZoomValue = document.querySelector('#canvas-zoom-value');
 
 const customBackgroundControl =
   document.querySelector('#custom-background-control');
@@ -72,18 +91,107 @@ let logoPromise = null;
 let backgroundImageData = null;
 let backgroundImageLoading = Promise.resolve(null);
 let imageRequest = 0;
+let localEditor = null;
+let calendarEditorRowId = null;
+let carouselEditorContext = null;
+let editorZoom = .46;
+let editorZoomMode = 'fit';
+let fitFrame = 0;
+
+const clampEditorZoom = value => Math.min(1.25, Math.max(.25, value));
+
+function setEditorZoom(value, mode = 'manual') {
+  editorZoom = clampEditorZoom(value);
+  editorZoomMode = mode;
+  preview.style.setProperty('--editor-zoom', String(editorZoom));
+  canvasZoomValue.textContent = Math.round(editorZoom * 100) + '%';
+}
+
+function fitEditorCanvas() {
+  if (localDesignEditor.hidden) return;
+  cancelAnimationFrame(fitFrame);
+  fitFrame = requestAnimationFrame(() => {
+    const width = Math.max(0, stage.clientWidth - 32);
+    const height = Math.max(0, stage.clientHeight - 32);
+    setEditorZoom(Math.min(width / 1080, height / 1350) * .96, 'fit');
+  });
+}
+
+function queueFitEditorCanvas() {
+  if (editorZoomMode === 'fit' && !localDesignEditor.hidden) {
+    fitEditorCanvas();
+  }
+}
+
+function cleanEditedPreview(source) {
+  const clone = source.cloneNode(true);
+  clone.querySelectorAll('[data-editor-ui="true"]').forEach(node => node.remove());
+  clone.querySelectorAll('.direct-edit-target, .direct-edit-selected').forEach(node => {
+    node.classList.remove('direct-edit-target', 'direct-edit-selected');
+    node.removeAttribute('contenteditable');
+  });
+  delete clone.dataset.selectedEditorElement;
+  return clone;
+}
+
+function closeLocalEditor() {
+  localEditor?.destroy?.();
+  localEditor = null;
+  localEditorControls.replaceChildren();
+  localDesignEditor.hidden = true;
+  canvasZoomControls.hidden = true;
+  saveCarouselSlide.hidden = true;
+  carouselEditorActions.hidden = true;
+  preview.style.removeProperty('--editor-zoom');
+  editDesign.textContent = 'Edit Design';
+  scalePreview();
+}
+
+function openLocalEditor() {
+  if (!currentStyle) return;
+  localEditor?.destroy?.();
+  beginLocalEdits(preview);
+  localEditor = setupLocalEditor(preview, localEditorControls, () => {
+    if (calendarEditorRowId) status.textContent = 'Edits are local. Save to Calendar when you are ready.';
+  });
+  localDesignEditor.hidden = false;
+  canvasZoomControls.hidden = false;
+  editDesign.textContent = 'Editing Design';
+  fitEditorCanvas();
+}
 
 
 // ==========================================================
+function openSharedEditor(options = {}) {
+  const { source = 'create', contentType = 'single-image', designMode = 'native', itemId = null, resultRef = '', renderedPreview = null, style = null, returnDestination = 'create', carouselContext = null } = options;
+  if (renderedPreview?.cloneNode && renderedPreview !== preview) { const imported = cleanEditedPreview(renderedPreview); imported.id = 'preview'; preview.replaceWith(imported); preview = imported; }
+  if (source !== 'create') { document.querySelector('#create-preview-panel').hidden = false; document.querySelector('#generator').closest('.controls').hidden = false; document.querySelector('#carousel-builder').hidden = true; document.querySelector('#multi-page-builder').hidden = true; }
+  currentStyle = style || preview.dataset?.style || currentStyle || 'premium-editorial'; calendarEditorRowId = source === 'calendar-single' ? itemId : null; carouselEditorContext = carouselContext;
+  frame.hidden = false; warning.hidden = true; document.querySelector('#empty-preview').hidden = true; download.disabled = false; editDesign.hidden = false; sendToPublish.hidden = contentType !== 'single-image'; sendToPublish.disabled = contentType !== 'single-image'; saveCalendarDesign.hidden = source !== 'calendar-single'; saveCarouselSlide.hidden = !carouselContext;
+  if (['builder','multi-page-builder'].includes(carouselContext?.source)) updateCarouselEditorActions(); else carouselEditorActions.hidden = true;
+  preview.dataset.editSource = source; preview.dataset.contentType = contentType; preview.dataset.designMode = designMode; preview.dataset.itemId = itemId || ''; preview.dataset.resultRef = resultRef || ''; preview.dataset.returnDestination = returnDestination;
+  scalePreview(); openLocalEditor(); return localEditor;
+}
+
 // PREVIEW SCALING
 // ==========================================================
 
 function scalePreview() {
+  if (!localDesignEditor.hidden) {
+    stage.style.transform = 'none';
+    queueFitEditorCanvas();
+    return;
+  }
+
   stage.style.transform =
     `scale(${frame.clientWidth / 1080})`;
 }
 
 new ResizeObserver(scalePreview).observe(frame);
+
+canvasFit.addEventListener('click', fitEditorCanvas);
+canvasZoomOut.addEventListener('click', () => setEditorZoom(editorZoom - .1));
+canvasZoomIn.addEventListener('click', () => setEditorZoom(editorZoom + .1));
 
 
 // ==========================================================
@@ -414,6 +522,12 @@ async function renderDesign(value) {
     );
 
   currentStyle = null;
+  closeLocalEditor();
+  calendarEditorRowId = null;
+  carouselEditorContext = null;
+  saveCalendarDesign.hidden = true;
+  saveCarouselSlide.hidden = true;
+  carouselEditorActions.hidden = true;
 
   generate.disabled = true;
   another.disabled = true;
@@ -525,6 +639,10 @@ async function renderDesign(value) {
     if (value.style === 'openai-style') {
       if (!aiDesign) throw new Error('Generate an AI visual first.');
       aiNotice = applyAIStyle(preview, value, aiDesign);
+      if (value.aiRenderMode === 'full-ai-artwork') {
+        preview.querySelector('.design-content').hidden = true;
+        preview.querySelector('#preview-logo').hidden = true;
+      }
     }
     // FIT
     const fits = fitTemplate(preview);
@@ -539,6 +657,7 @@ async function renderDesign(value) {
     preview.style.visibility = 'visible';
 
     download.disabled = !fits;
+    editDesign.hidden = !fits;
     sendToPublish.hidden = !fits;
     sendToPublish.disabled = !fits;
 
@@ -582,6 +701,7 @@ async function renderDesign(value) {
     warning.hidden = false;
     sendToPublish.hidden = true;
     sendToPublish.disabled = true;
+    editDesign.hidden = true;
 
     status.textContent =
       'Preview could not be prepared. Please generate again.';
@@ -600,6 +720,162 @@ function renderPreview() {
 // ==========================================================
 // DOWNLOAD
 // ==========================================================
+
+editDesign.addEventListener('click', () => { if (!currentStyle) return; openSharedEditor({ source: 'create', contentType: 'single-image', designMode: form.elements.style.value === 'openai-style' ? form.elements.aiRenderMode.value : 'native', renderedPreview: preview, style: currentStyle, returnDestination: 'create' }); });
+
+resetDesignEdits.addEventListener('click', () => {
+  if (!localEditor) return;
+  localEditor.reset();
+  status.textContent = calendarEditorRowId
+    ? 'Edits reset. Save to Calendar when you are ready.'
+    : 'Design edits reset to this design’s defaults.';
+});
+
+saveCalendarDesign.addEventListener('click', async () => {
+  const rowId = calendarEditorRowId;
+  const calendar = loadCalendar();
+  const row = calendar?.rows?.find(item => item.id === rowId);
+
+  if (!row || !currentStyle) {
+    status.textContent = 'This Calendar design is no longer available. Return to Calendar and try again.';
+    return;
+  }
+
+  saveCalendarDesign.disabled = true;
+  status.textContent = 'Saving edited design to Calendar…';
+
+  try {
+    const resultRef = row.resultRef || calendarResultRef(row.id);
+    const result = {
+      preview: cleanEditedPreview(preview),
+      style: currentStyle
+    };
+
+    await saveCalendarAsset(resultRef, result);
+
+    const nextRows = calendar.rows.map(item =>
+      item.id === row.id
+        ? { ...item, resultRef }
+        : item
+    );
+
+    saveCalendar(nextRows);
+
+    document.dispatchEvent(new CustomEvent('calendar:design-saved', {
+      detail: {
+        id: row.id,
+        resultRef,
+        result: {
+          preview: result.preview.cloneNode(true),
+          style: result.style
+        }
+      }
+    }));
+
+    closeLocalEditor();
+    calendarEditorRowId = null;
+    saveCalendarDesign.hidden = true;
+    status.textContent = 'Edited design saved to Calendar.';
+    document.dispatchEvent(new Event('navigate:review'));
+  } catch {
+    status.textContent = 'The edited design could not be saved. Please try again.';
+  } finally {
+    saveCalendarDesign.disabled = false;
+  }
+});
+
+function commitCarouselBuilderSlide() {
+  const context = carouselEditorContext;
+  if (!context || !['builder', 'multi-page-builder'].includes(context.source)) return;
+  const isCarousel = context.source === 'builder'; const collection = isCarousel ? context.draft.slides : context.draft.pages; const index = isCarousel ? context.slideIndex : context.pageIndex; const item = collection[index];
+  if (!item) return; item.settings = { ...(item.settings || {}), editedHtml: cleanEditedPreview(preview).outerHTML };
+  document.dispatchEvent(new CustomEvent(isCarousel ? 'carousel:builder-draft-commit' : 'multi-page:builder-page-saved', { detail: isCarousel ? { draft: context.draft, slideIndex: index } : { draft: context.draft, pageIndex: index, preview: cleanEditedPreview(preview) } }));
+}
+function updateCarouselEditorActions() {
+  const context = carouselEditorContext;
+  if (!context || !['builder', 'multi-page-builder'].includes(context.source)) return;
+  const isCarousel = context.source === 'builder'; const index = isCarousel ? context.slideIndex : context.pageIndex; const total = isCarousel ? context.draft.slides.length : context.draft.pages.length;
+  carouselEditorActions.hidden = false; carouselEditorPosition.textContent = (isCarousel ? 'Slide ' : 'Page ') + (index + 1) + ' of ' + total; carouselEditorPrevious.disabled = index === 0; carouselEditorNext.disabled = index === total - 1;
+}
+function loadCarouselBuilderSlide(index) {
+  commitCarouselBuilderSlide(); const context = carouselEditorContext; const isCarousel = context.source === 'builder';
+  const request = new CustomEvent(isCarousel ? 'carousel:builder-slide-preview' : 'multi-page:builder-page-preview', { detail: { draft: context.draft, [isCarousel ? 'slideIndex' : 'pageIndex']: index, resolve: detail => {
+    const imported = cleanEditedPreview(detail.preview); imported.id = 'preview'; preview.replaceWith(imported); preview = imported;
+    carouselEditorContext = { ...context, draft: detail.draft, ...(isCarousel ? { slideIndex: index } : { pageIndex: index }) }; openLocalEditor(); updateCarouselEditorActions(); status.textContent = 'Editing ' + (isCarousel ? 'Carousel slide ' : 'Multi-Page page ') + (index + 1) + ' locally.';
+  } } }); document.dispatchEvent(request);
+}
+carouselEditorPrevious.addEventListener('click', () => { const c = carouselEditorContext; const index = c?.source === 'builder' ? c.slideIndex : c?.pageIndex; if (['builder','multi-page-builder'].includes(c?.source) && index > 0) loadCarouselBuilderSlide(index - 1); });
+carouselEditorNext.addEventListener('click', () => { const c = carouselEditorContext; const index = c?.source === 'builder' ? c.slideIndex : c?.pageIndex; const total = c?.source === 'builder' ? c.draft.slides.length : c?.draft.pages.length; if (['builder','multi-page-builder'].includes(c?.source) && index < total - 1) loadCarouselBuilderSlide(index + 1); });
+carouselEditorBack.addEventListener('click', () => { const c = carouselEditorContext; if (['builder','multi-page-builder'].includes(c?.source)) { commitCarouselBuilderSlide(); document.dispatchEvent(new CustomEvent(c.source === 'builder' ? 'carousel:builder-slide-saved' : 'multi-page:builder-page-saved', { detail: c.source === 'builder' ? { draft: c.draft, slideIndex: c.slideIndex, preview: cleanEditedPreview(preview) } : { draft: c.draft, pageIndex: c.pageIndex, preview: cleanEditedPreview(preview) } })); closeLocalEditor(); carouselEditorContext = null; document.dispatchEvent(new Event('navigate:create')); } });
+saveCarouselSlide.addEventListener('click', async () => {
+  const context = carouselEditorContext;
+  if (!context) return;
+
+  saveCarouselSlide.disabled = true;
+  status.textContent = 'Saving edited slide…';
+
+  try {
+    if (context.source === 'builder' || context.source === 'multi-page-builder') {
+      document.dispatchEvent(new CustomEvent(context.source === 'builder' ? 'carousel:builder-slide-saved' : 'multi-page:builder-page-saved', { detail: context.source === 'builder' ? { draft: context.draft, slideIndex: context.slideIndex, preview: cleanEditedPreview(preview) } : { draft: context.draft, pageIndex: context.pageIndex, preview: cleanEditedPreview(preview) } }));
+      closeLocalEditor();
+      carouselEditorContext = null;
+      saveCarouselSlide.hidden = true;
+  carouselEditorActions.hidden = true;
+      status.textContent = 'Edited slide saved to Carousel Builder.';
+      return;
+    }
+    const asset = await loadCalendarAsset(context.resultRef);
+    if (!asset || asset.type !== 'carousel' || !asset.slides?.[context.slideIndex]) {
+      throw new Error('Carousel result is unavailable.');
+    }
+
+    const slides = asset.slides.map((slide, index) => {
+      if (index !== context.slideIndex) return slide;
+      return {
+        ...slide,
+        html: cleanEditedPreview(preview).outerHTML
+      };
+    });
+
+    const parseSlide = slide => {
+      const template = document.createElement('template');
+      template.innerHTML = slide.html;
+      return {
+        ...slide,
+        preview: template.content.firstElementChild
+      };
+    };
+
+    await saveCalendarAsset(context.resultRef, {
+      type: 'carousel',
+      width: asset.width || 1080,
+      height: asset.height || 1350,
+      style: context.style || asset.style,
+      slides: slides.map(parseSlide)
+    });
+
+    document.dispatchEvent(new CustomEvent('calendar:carousel-slide-saved', {
+      detail: {
+        id: context.id,
+        resultRef: context.resultRef,
+        style: context.style || asset.style,
+        slideIndex: context.slideIndex,
+        slides: slides.map(parseSlide)
+      }
+    }));
+
+    closeLocalEditor();
+    carouselEditorContext = null;
+    saveCarouselSlide.hidden = true;
+  carouselEditorActions.hidden = true;
+    status.textContent = 'Edited slide saved to Carousel.';
+    document.dispatchEvent(new Event('navigate:review'));
+  } catch {
+    status.textContent = 'The edited slide could not be saved. Please try again.';
+  } finally {
+    saveCarouselSlide.disabled = false;
+  }
+});
 
 download.addEventListener('click', async () => {
   if (!currentStyle || download.disabled) {
@@ -627,6 +903,83 @@ download.addEventListener('click', async () => {
     download.disabled = !currentStyle;
   }
 });
+
+document.addEventListener('calendar:design-edit', event => {
+  const { id, resultRef = '', preview: source, style, designMode = 'native' } = event.detail || {};
+  if (!id || !source?.cloneNode) return;
+  closeLocalEditor();
+  openSharedEditor({ source: 'calendar-single', contentType: 'single-image', designMode, itemId: id, resultRef, renderedPreview: source, style, returnDestination: 'review' });
+  document.querySelector('#preview-style').textContent = designStyles.find(item => item.id === currentStyle)?.name || 'Calendar design';
+  status.textContent = 'Editing Calendar design locally. Save to Calendar when you are ready.';
+});
+
+document.addEventListener('calendar:carousel-slide-edit', event => {
+  const { id, resultRef, slideIndex, preview: source, style } = event.detail || {};
+  if (!id || !resultRef || !source?.cloneNode) return;
+
+  closeLocalEditor();
+  const imported = cleanEditedPreview(source);
+  imported.id = 'preview';
+  preview.replaceWith(imported);
+  preview = imported;
+
+  calendarEditorRowId = null;
+  carouselEditorContext = { id, resultRef, slideIndex, style };
+  currentStyle = style || 'carousel';
+  frame.hidden = false;
+  warning.hidden = true;
+  document.querySelector('#empty-preview').hidden = true;
+  document.querySelector('#preview-style').textContent =
+    'Carousel slide ' + (slideIndex + 1);
+  download.disabled = false;
+  editDesign.hidden = false;
+  sendToPublish.hidden = true;
+  saveCalendarDesign.hidden = true;
+  saveCarouselSlide.hidden = false;
+  scalePreview();
+  openLocalEditor();
+  status.textContent = 'Editing Carousel slide locally. Save Slide when you are ready.';
+});
+document.addEventListener('multi-page:builder-page-edit', event => {
+  const { draft, pageIndex, preview: source } = event.detail || {};
+  if (!draft || !Number.isInteger(pageIndex) || !source?.cloneNode) return;
+  closeLocalEditor();
+  openSharedEditor({ source: 'multi-page-builder', contentType: 'multi-page', designMode: draft.designMode || 'native', pageIndex, renderedPreview: source, style: draft.pages[pageIndex]?.style || 'premium-editorial', returnDestination: 'create', carouselContext: { source: 'multi-page-builder', draft, pageIndex, style: draft.pages[pageIndex]?.style || 'premium-editorial' } });
+  document.querySelector('#preview-style').textContent = 'Multi-Page page ' + (pageIndex + 1);
+  status.textContent = 'Editing Multi-Page page locally. Save Changes when you are ready.';
+});
+document.addEventListener('carousel:builder-slide-edit', event => {
+  const { draft, slideIndex, preview: source } = event.detail || {};
+  if (!draft || !Number.isInteger(slideIndex) || !source?.cloneNode) return;
+  // Carousel mode hides the normal Create preview. Reveal that shared canvas
+  // before initializing the editor so sizing and direct manipulation are real.
+  document.querySelector('#carousel-builder').hidden = true;
+  document.querySelector('#generator').closest('.controls').hidden = false;
+  document.querySelector('#create-preview-panel').hidden = false;
+  closeLocalEditor();
+  const imported = cleanEditedPreview(source);
+  imported.id = 'preview';
+  preview.replaceWith(imported);
+  preview = imported;
+  calendarEditorRowId = null;
+  carouselEditorContext = { source: 'builder', draft, slideIndex, style: draft.style };
+  currentStyle = draft.style || 'carousel';
+  frame.hidden = false;
+  warning.hidden = true;
+  document.querySelector('#empty-preview').hidden = true;
+  document.querySelector('#preview-style').textContent = 'Carousel slide ' + (slideIndex + 1);
+  download.disabled = false;
+  editDesign.hidden = false;
+  sendToPublish.hidden = true;
+  saveCalendarDesign.hidden = true;
+  saveCarouselSlide.hidden = false;
+  saveCarouselSlide.textContent = 'Save Changes';
+  updateCarouselEditorActions();
+  scalePreview();
+  console.info(`[CAROUSEL EDIT] opening shared editor for slide ${slideIndex + 1}`);
+  openLocalEditor();
+  status.textContent = 'Editing Carousel Builder slide locally. Save Slide when you are ready.';
+});
 sendToPublish.addEventListener('click', async () => {
   if (!currentStyle || sendToPublish.disabled) return;
   const value = state();
@@ -641,6 +994,10 @@ sendToPublish.addEventListener('click', async () => {
     document.dispatchEvent(new CustomEvent('publishing:generated', {
       detail: {
         resultRef,
+        source: preview.dataset.editSource || 'create',
+        contentType: 'single-image',
+        itemId: preview.dataset.itemId || null,
+        designMode: preview.dataset.designMode || 'native',
         headline: value.headline,
         supportingCopy: value.supportingCopy,
         cta: value.cta,
@@ -648,8 +1005,9 @@ sendToPublish.addEventListener('click', async () => {
       }
     }));
     status.textContent = 'Design ready in Publishing.';
-  } catch {
-    status.textContent = 'This design could not be prepared for publishing. Please try again.';
+  } catch (error) {
+    status.textContent = error.message || 'This design could not be prepared for publishing. Please try again.';
+  } finally {
     sendToPublish.disabled = false;
   }
 });
@@ -669,6 +1027,7 @@ async function generateAI(regenerateOnly = false) {
   const previous = aiDesign;
   const value = state();
   aiBusy = true;
+  showProcessing({ title: 'Creating your design…', message: 'Generating your visual and preparing the layout.' });
   const disabled = [...form.elements].map(element => [element, element.disabled]);
   for (const [element] of disabled) element.disabled = true;
   regenerate.disabled = download.disabled = another.disabled = true;
@@ -691,6 +1050,7 @@ async function generateAI(regenerateOnly = false) {
     if (previous) await renderPreview();
     status.textContent = error.message + (previous ? ' Last successful visual preserved.' : ' The other design styles are still available.');
   } finally {
+    hideProcessing();
     for (const [element, wasDisabled] of disabled) element.disabled = wasDisabled;
     aiBusy = false;
     updateControls();

@@ -5,7 +5,7 @@ import {
 } from './typography.js';
 
 import { brand } from './brand.js';
-import { loadSavedDesignPrompts, saveDesignPrompt, deleteDesignPrompt } from './saved-design-prompts.js';
+import { loadSavedDesignPrompts, saveDesignPrompt, deleteDesignPrompt, renameDesignPrompt, duplicateDesignPrompt } from './saved-design-prompts.js';
 
 import {
   validatePlan,
@@ -19,6 +19,7 @@ export const aiDefaults = {
   aiSubject: 'auto',
   aiDirection: '',
   aiDesignPrompt: '',
+  aiRenderMode: 'visual-native-text',
   aiComposition: 'auto',
   aiQuality: 'draft',
 
@@ -115,15 +116,21 @@ export function setupAIControls() {
   `;
 
   panel.append(direction);
+  select(panel, 'aiRenderMode', 'AI Design Mode', [
+    ['visual-native-text', 'AI Visual + Native Text'],
+    ['full-ai-artwork', 'Full AI Artwork (flattened)']
+  ]);
   const promptLibrary = document.createElement('div');
   promptLibrary.id = 'ai-prompt-library';
-  promptLibrary.innerHTML = `<label for="aiDesignPrompt">Design Prompt</label><textarea id="aiDesignPrompt" name="aiDesignPrompt" rows="3" maxlength="1200" placeholder="Describe how you want the design to look..."></textarea><label for="aiSavedPrompt">Saved Prompts</label><div class="ai-prompt-actions"><select id="aiSavedPrompt"><option value="">Select saved prompt...</option></select><button id="aiSavePrompt" type="button">Save Prompt</button><button id="aiDeletePrompt" type="button">Delete</button></div>`;
+  promptLibrary.innerHTML = `<label for="aiDesignPrompt">Design Prompt / Creative Direction</label><textarea id="aiDesignPrompt" name="aiDesignPrompt" rows="3" maxlength="1200" placeholder="Describe how you want the design to look..."></textarea><label for="aiSavedPrompt">Saved Prompts</label><div class="ai-prompt-actions"><select id="aiSavedPrompt"><option value="">Select saved prompt...</option></select><button id="aiSavePrompt" type="button">Save</button><button id="aiRenamePrompt" type="button">Rename</button><button id="aiDuplicatePrompt" type="button">Duplicate</button><button id="aiDeletePrompt" type="button">Delete</button></div>`;
   panel.append(promptLibrary);
   const prompt = promptLibrary.querySelector('#aiDesignPrompt'); const saved = promptLibrary.querySelector('#aiSavedPrompt');
   const refreshPrompts = () => { const selected = saved.value; saved.replaceChildren(new Option('Select saved prompt...', '')); loadSavedDesignPrompts().forEach(item => saved.add(new Option(item.name, item.id))); saved.value = selected; };
   refreshPrompts();
   saved.addEventListener('change', () => { const item = loadSavedDesignPrompts().find(entry => entry.id === saved.value); if (item) prompt.value = item.prompt; });
   promptLibrary.querySelector('#aiSavePrompt').addEventListener('click', () => { if (!prompt.value.trim()) { prompt.focus(); return; } const name = window.prompt('Prompt name:'); if (!name) return; saveDesignPrompt(name, prompt.value); refreshPrompts(); saved.value = loadSavedDesignPrompts().at(-1)?.id || ''; });
+  promptLibrary.querySelector('#aiRenamePrompt').addEventListener('click', () => { const item = loadSavedDesignPrompts().find(entry => entry.id === saved.value); if (!item) return; const name = window.prompt('Prompt name:', item.name); if (!name) return; renameDesignPrompt(item.id, name); refreshPrompts(); saved.value = item.id; });
+  promptLibrary.querySelector('#aiDuplicatePrompt').addEventListener('click', () => { if (!saved.value) return; const item = duplicateDesignPrompt(saved.value); refreshPrompts(); saved.value = item.id; });
   promptLibrary.querySelector('#aiDeletePrompt').addEventListener('click', () => { if (!saved.value) return; deleteDesignPrompt(saved.value); refreshPrompts(); });
 
   select(
@@ -338,7 +345,8 @@ export function directorInput(value) {
       value.aiComposition,
 
     customDirection:
-      manualPrompt || (custom ? value.aiDirection : '')
+      manualPrompt || (custom ? value.aiDirection : ''),
+    renderMode: value.aiRenderMode === 'full-ai-artwork' ? 'full-ai-artwork' : 'visual-native-text'
   };
 }
 

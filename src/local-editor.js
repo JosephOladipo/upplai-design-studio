@@ -29,6 +29,81 @@ const FONT_OPTIONS = [
   'Inter'
 ];
 
+export const SHAPE_OPTIONS = [
+  { id: 'rectangle', label: 'Rectangle' },
+  { id: 'rounded-rectangle', label: 'Rounded Rectangle' },
+  { id: 'circle', label: 'Circle' },
+  { id: 'ellipse', label: 'Ellipse' },
+  { id: 'triangle', label: 'Triangle' },
+  { id: 'line', label: 'Line' },
+  { id: 'pill', label: 'Pill' },
+  { id: 'star', label: 'Star' },
+  { id: 'arrow', label: 'Arrow' }
+];
+
+function addShape(preview, shapeType) {
+  const node = document.createElement('div');
+  const option = SHAPE_OPTIONS.find(item => item.id === shapeType);
+  const newId = 'shape-' + Date.now().toString(36);
+
+  node.dataset.editorId = newId;
+  node.dataset.editorType = 'shape';
+  node.dataset.editorLabel = option?.label || 'New Shape';
+  node.dataset.shapeType = shapeType;
+  node.dataset.editorText = 'false';
+  node.dataset.editorMovable = 'true';
+  node.dataset.editorResizable = 'true';
+  node.dataset.editorDeletable = 'true';
+  node.dataset.editorCreated = 'true';
+  node.style.position = 'absolute';
+  node.style.left = '140px';
+  node.style.top = '140px';
+  node.style.width = '220px';
+  node.style.height = '90px';
+  node.style.background = '#50c4f8';
+  node.style.zIndex = '10';
+
+  if (shapeType === 'circle') {
+    node.style.width = '160px';
+    node.style.height = '160px';
+    node.style.borderRadius = '50%';
+  } else if (shapeType === 'ellipse') {
+    node.style.width = '220px';
+    node.style.height = '130px';
+    node.style.borderRadius = '50%';
+  } else if (shapeType === 'rounded-rectangle') {
+    node.style.borderRadius = '24px';
+  } else if (shapeType === 'pill') {
+    node.style.height = '72px';
+    node.style.borderRadius = '999px';
+  } else if (shapeType === 'triangle') {
+    node.style.width = '180px';
+    node.style.height = '160px';
+    node.style.clipPath = 'polygon(50% 0%, 100% 100%, 0% 100%)';
+  } else if (shapeType === 'line') {
+    node.style.width = '240px';
+    node.style.height = '8px';
+  } else if (shapeType === 'star') {
+    node.style.width = '160px';
+    node.style.height = '160px';
+    node.style.clipPath = 'polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)';
+  } else if (shapeType === 'arrow') {
+    node.style.width = '240px';
+    node.style.height = '110px';
+    node.style.clipPath = 'polygon(0 38%, 65% 38%, 65% 0, 100% 50%, 65% 100%, 65% 62%, 0 62%)';
+  }
+
+  preview.append(node);
+  state[newId] = {
+    x: 140,
+    y: 140,
+    width: px(node.style.width),
+    height: px(node.style.height),
+    background: '#50c4f8'
+  };
+  return newId;
+}
+
 function editableNodes(preview) {
   const found = new Map();
 
@@ -87,6 +162,17 @@ function scaleFor(preview) {
   };
 }
 
+// The preview can be transformed for Fit/zoom. All direct manipulation stays
+// in unscaled design coordinates derived from its live screen rectangle.
+export function screenToCanvas(preview, clientX, clientY) {
+  const rect = preview.getBoundingClientRect();
+  const scale = scaleFor(preview);
+  return {
+    x: (clientX - rect.left) / (scale.x || 1),
+    y: (clientY - rect.top) / (scale.y || 1)
+  };
+}
+
 function canvasPosition(preview, node) {
   const previewRect = preview.getBoundingClientRect();
   const nodeRect = node.getBoundingClientRect();
@@ -122,13 +208,19 @@ function emitChanged(changed) {
   changed?.(state);
 }
 
+function translateValues(node) {
+  const values = String(node.style.translate || '').match(/(-?[\d.]+)px\s+(-?[\d.]+)px/);
+  return values ? { x: Number(values[1]), y: Number(values[2]) } : { x: 0, y: 0 };
+}
+
 function setPosition(preview, node, id, x, y) {
   const values = ensureState(id);
-
-  node.style.position = 'absolute';
-  node.style.margin = '0';
-  node.style.left = `${Math.round(x)}px`;
-  node.style.top = `${Math.round(y)}px`;
+  const current = canvasPosition(preview, node);
+  const translate = translateValues(node);
+  // Translation moves the rendered object without changing its participation
+  // in the template's flex/grid layout. This keeps selection and dragging
+  // visually stable for existing template elements.
+  node.style.translate = `${Math.round(translate.x + x - current.x)}px ${Math.round(translate.y + y - current.y)}px`;
 
   values.x = Math.round(x);
   values.y = Math.round(y);
@@ -470,26 +562,17 @@ function makeDirectEditor(preview, changed, selectedChanged) {
       if (node.dataset.editorMovable === 'false' || node.dataset.editorLocked === 'true') return;
 
       const position = canvasPosition(preview, node);
-      const scale = scaleFor(preview);
-
-      setPosition(
-        preview,
-        node,
-        id,
-        position.x,
-        position.y
-      );
+      const pointer = screenToCanvas(preview, event.clientX, event.clientY);
 
       dragging = {
         node,
         id,
         pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
+        grabX: pointer.x - position.x,
+        grabY: pointer.y - position.y,
         left: position.x,
         top: position.y,
-        scaleX: scale.x || 1,
-        scaleY: scale.y || 1
+        moved: false
       };
 
       node.setPointerCapture?.(event.pointerId);
@@ -498,19 +581,17 @@ function makeDirectEditor(preview, changed, selectedChanged) {
     const pointerMove = event => {
       if (!dragging || dragging.node !== node) return;
 
-      const x =
-        dragging.left +
-        (event.clientX - dragging.startX) /
-          dragging.scaleX;
+      const pointer = screenToCanvas(preview, event.clientX, event.clientY);
+      const x = pointer.x - dragging.grabX;
+      const y = pointer.y - dragging.grabY;
 
-      const y =
-        dragging.top +
-        (event.clientY - dragging.startY) /
-          dragging.scaleY;
+      // A click selects only. Do not convert or reposition a layout element
+      // until an intentional drag has crossed a small design-space threshold.
+      if (!dragging.moved && Math.hypot(x - dragging.left, y - dragging.top) < 2) return;
+      dragging.moved = true;
 
       setPosition(preview, node, id, x, y);
       emitChanged(changed);
-      selectedChanged?.(id);
     };
 
     const pointerUp = event => {
@@ -597,18 +678,16 @@ function makeDirectEditor(preview, changed, selectedChanged) {
         select(id);
 
         const position = canvasPosition(preview, node);
-        const scale = scaleFor(preview);
+        const pointer = screenToCanvas(preview, event.clientX, event.clientY);
 
         resizing = {
           node,
           id,
           pointerId: event.pointerId,
-          startX: event.clientX,
-          startY: event.clientY,
+          grabX: pointer.x - position.x,
+          grabY: pointer.y - position.y,
           width: position.width,
-          height: position.height,
-          scaleX: scale.x || 1,
-          scaleY: scale.y || 1
+          height: position.height
         };
 
         resize.setPointerCapture?.(event.pointerId);
@@ -617,24 +696,14 @@ function makeDirectEditor(preview, changed, selectedChanged) {
       const resizeMove = event => {
         if (!resizing || resizing.node !== node || node.dataset.editorLocked === 'true') return;
 
-        const width = Math.max(
-          20,
-          resizing.width +
-            (event.clientX - resizing.startX) /
-              resizing.scaleX
-        );
-
-        const height = Math.max(
-          20,
-          resizing.height +
-            (event.clientY - resizing.startY) /
-              resizing.scaleY
-        );
+        const pointer = screenToCanvas(preview, event.clientX, event.clientY);
+        const position = canvasPosition(preview, node);
+        const width = Math.max(20, pointer.x - position.x);
+        const height = Math.max(20, pointer.y - position.y);
 
         setSize(node, id, width, height);
 
         emitChanged(changed);
-        selectedChanged?.(id);
       };
 
       const resizeUp = event => {
@@ -771,7 +840,11 @@ function renderInspector({
   id,
   directEditor,
   changed,
-  rerender
+  rerender,
+  undo,
+  redo,
+  canUndo,
+  canRedo
 }) {
   container.replaceChildren();
 
@@ -779,6 +852,18 @@ function renderInspector({
 
   const shell = document.createElement('div');
   shell.className = 'canvas-editor-shell';
+
+  const historyControls = document.createElement('div');
+  historyControls.className = 'editor-history-controls';
+
+  const undoButton = button('↶ Undo', undo);
+  undoButton.disabled = !canUndo;
+
+  const redoButton = button('↷ Redo', redo);
+  redoButton.disabled = !canRedo;
+
+  historyControls.append(undoButton, redoButton);
+  shell.append(historyControls);
 
   const toolbar = document.createElement('div');
   toolbar.className = 'canvas-editor-toolbar';
@@ -822,49 +907,7 @@ function renderInspector({
     }),
 
     button('+ Shape', () => {
-      const shapeType = window.prompt('Shape: rectangle, rounded, circle, ellipse, triangle, line, arrow, pill, star', 'rectangle'); if (!shapeType) return;
-      const node = document.createElement('div');
-
-      const newId =
-        `shape-${Date.now().toString(36)}`;
-
-      node.dataset.editorId = newId;
-      node.dataset.editorType = 'shape';
-      node.dataset.editorLabel = New ; node.dataset.shapeType = shapeType.toLowerCase();
-      node.dataset.editorText = 'false';
-      node.dataset.editorMovable = 'true';
-      node.dataset.editorResizable = 'true';
-      node.dataset.editorDeletable = 'true';
-      node.dataset.editorCreated = 'true';
-
-      node.style.position = 'absolute';
-      node.style.left = '140px';
-      node.style.top = '140px';
-      node.style.width = '220px';
-      node.style.height = '90px';
-      node.style.background = '#50c4f8';
-      if (node.dataset.shapeType === 'circle') { node.style.width='160px'; node.style.height='160px'; node.style.borderRadius='50%'; }
-      if (node.dataset.shapeType === 'ellipse') node.style.borderRadius='50%';
-      if (node.dataset.shapeType === 'rounded' || node.dataset.shapeType === 'pill') node.style.borderRadius = node.dataset.shapeType === 'pill' ? '999px' : '24px';
-      if (node.dataset.shapeType === 'triangle') { node.style.width='0'; node.style.height='0'; node.style.background='transparent'; node.style.borderLeft='110px solid transparent'; node.style.borderRight='110px solid transparent'; node.style.borderBottom='180px solid #50c4f8'; }
-      if (node.dataset.shapeType === 'line') { node.style.height='8px'; }
-      if (node.dataset.shapeType === 'star') { node.style.clipPath='polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)'; }
-      node.style.zIndex = '10';
-
-      preview.append(node);
-
-      state[newId] = {
-        x: 140,
-        y: 140,
-        width: 220,
-        height: 90,
-        background: '#50c4f8'
-      };
-
-      directEditor.refresh();
-      directEditor.select(newId);
-      emitChanged(changed);
-      rerender(newId);
+      shapePicker.hidden = !shapePicker.hidden;
     }),
 
     button('+ Image', () => {
@@ -881,6 +924,37 @@ function renderInspector({
   );
 
   shell.append(toolbar);
+
+  const shapePicker = document.createElement('div');
+  shapePicker.className = 'shape-picker';
+  shapePicker.hidden = true;
+  shapePicker.setAttribute('aria-label', 'Choose a shape');
+
+  for (const shape of SHAPE_OPTIONS) {
+    const option = button('', () => {
+      const newId = addShape(preview, shape.id);
+      directEditor.refresh();
+      directEditor.select(newId);
+      emitChanged(changed);
+      rerender(newId);
+    }, 'shape-picker-option');
+
+    option.title = shape.label;
+    option.setAttribute('aria-label', shape.label);
+
+    const icon = document.createElement('span');
+    icon.className = 'shape-picker-icon';
+    icon.dataset.shape = shape.id;
+    icon.setAttribute('aria-hidden', 'true');
+
+    const label = document.createElement('span');
+    label.textContent = shape.label;
+
+    option.append(icon, label);
+    shapePicker.append(option);
+  }
+
+  shell.append(shapePicker);
 
   const layers = document.createElement('div');
   layers.className = 'editor-layers';
@@ -1773,6 +1847,33 @@ function renderInspector({
 
     inspector.append(field('Fill', background));
 
+    const borderWidth = numberInput(
+      px(values.borderWidth || computed.borderWidth),
+      { min: 0, max: 80, step: 1 }
+    );
+
+    const borderColor = colorInput(
+      values.borderColor ||
+        computedHex(node, 'borderColor', '#101d30')
+    );
+
+    const updateShapeBorder = () => {
+      values.borderWidth = px(borderWidth.value);
+      values.borderColor = borderColor.value;
+      applyValue(node, 'borderWidth', values.borderWidth);
+      applyValue(node, 'borderColor', values.borderColor);
+      node.style.borderStyle = values.borderWidth ? 'solid' : 'none';
+      emitChanged(changed);
+    };
+
+    borderWidth.addEventListener('input', updateShapeBorder);
+    borderColor.addEventListener('input', updateShapeBorder);
+
+    inspector.append(
+      field('Border width', borderWidth),
+      field('Border color', borderColor)
+    );
+
     const radius = numberInput(
       px(values.borderRadius || computed.borderRadius),
       { min: 0, max: 500, step: 1 }
@@ -1835,6 +1936,86 @@ export function setupLocalEditor(
 
   let selectedId = 'headline';
   let directEditor = null;
+  let copiedObject = null;
+  let historyIndex = 0;
+  let historyTimer = 0;
+  let restoringHistory = false;
+
+  const snapshot = () => {
+    const clone = preview.cloneNode(true);
+    clone.querySelectorAll('[data-editor-ui="true"]').forEach(node => node.remove());
+    clone.querySelectorAll('.direct-edit-target, .direct-edit-selected').forEach(node => {
+      node.classList.remove('direct-edit-target', 'direct-edit-selected');
+      node.removeAttribute('contenteditable');
+    });
+    delete clone.dataset.selectedEditorElement;
+    return clone.outerHTML;
+  };
+
+  let history = [snapshot()];
+
+  const commitHistory = () => {
+    historyTimer = 0;
+    if (restoringHistory) return;
+    const next = snapshot();
+    if (history[historyIndex] === next) return;
+    history = history.slice(0, historyIndex + 1);
+    history.push(next);
+    historyIndex = history.length - 1;
+    // Do not rebuild the inspector after a routine value change. Rebuilding
+    // loses the current field focus and resets the inspector scroll position.
+  };
+
+  const recordChange = () => {
+    changed(state);
+    if (restoringHistory) return;
+    clearTimeout(historyTimer);
+    historyTimer = setTimeout(commitHistory, 180);
+  };
+
+  const restoreHistory = source => {
+    const template = document.createElement('template');
+    template.innerHTML = source;
+    const restored = template.content.firstElementChild;
+    if (!restored) return;
+
+    restoringHistory = true;
+    directEditor?.destroy();
+    preview.className = restored.className;
+    preview.style.cssText = restored.style.cssText;
+    preview.replaceChildren(...[...restored.childNodes].map(node => node.cloneNode(true)));
+    state = {};
+    directEditor = makeDirectEditor(preview, recordChange, id => {
+      selectedId = id;
+      rerender(id);
+    });
+    selectedId = nodeById(preview, selectedId)
+      ? selectedId
+      : editableNodes(preview)[0]?.id || null;
+    restoringHistory = false;
+    changed(state);
+    rerender(selectedId);
+  };
+
+  const undo = () => {
+    if (historyTimer) {
+      clearTimeout(historyTimer);
+      commitHistory();
+    }
+    if (historyIndex <= 0) return;
+    historyIndex -= 1;
+    restoreHistory(history[historyIndex]);
+  };
+
+  const redo = () => {
+    if (historyTimer) {
+      clearTimeout(historyTimer);
+      commitHistory();
+    }
+    if (historyIndex >= history.length - 1) return;
+    historyIndex += 1;
+    restoreHistory(history[historyIndex]);
+  };
 
   const rerender = id => {
     selectedId = id;
@@ -1844,14 +2025,18 @@ export function setupLocalEditor(
       container,
       id: selectedId,
       directEditor,
-      changed,
-      rerender
+      changed: recordChange,
+      rerender,
+      undo,
+      redo,
+      canUndo: historyIndex > 0,
+      canRedo: historyIndex < history.length - 1
     });
   };
 
   directEditor = makeDirectEditor(
     preview,
-    changed,
+    recordChange,
     id => {
       selectedId = id;
       rerender(id);
@@ -1877,6 +2062,52 @@ export function setupLocalEditor(
     if (typing) return;
 
     const id = directEditor.selected();
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      redo();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+      const selected = id && nodeById(preview, id);
+      if (!selected) return;
+      event.preventDefault();
+      copiedObject = selected.cloneNode(true);
+      copiedObject.querySelectorAll('[data-editor-ui="true"]').forEach(node => node.remove());
+      copiedObject.classList.remove('direct-edit-target', 'direct-edit-selected');
+      copiedObject.removeAttribute('contenteditable');
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
+      if (!copiedObject) return;
+      event.preventDefault();
+      const pasted = copiedObject.cloneNode(true);
+      const newId = 'object-' + Date.now().toString(36);
+      const position = id ? canvasPosition(preview, nodeById(preview, id)) : { x: 96, y: 96 };
+      pasted.dataset.editorId = newId;
+      pasted.dataset.editorLabel = (pasted.dataset.editorLabel || 'Object') + ' Copy';
+      pasted.dataset.editorCreated = 'true';
+      pasted.style.position = 'absolute';
+      pasted.style.left = (position.x + 24) + 'px';
+      pasted.style.top = (position.y + 24) + 'px';
+      preview.append(pasted);
+      state[newId] = { x: position.x + 24, y: position.y + 24 };
+      directEditor.refresh();
+      directEditor.select(newId);
+      recordChange();
+      rerender(newId);
+      return;
+    }
+
     if (!id) return;
 
     const node = nodeById(preview, id);
@@ -1889,7 +2120,7 @@ export function setupLocalEditor(
       event.preventDefault();
 
       if (deleteObject(preview, id)) {
-        emitChanged(changed);
+        recordChange();
         rerender(null);
       }
 
@@ -1907,7 +2138,7 @@ export function setupLocalEditor(
       if (newId) {
         directEditor.refresh();
         directEditor.select(newId);
-        emitChanged(changed);
+        recordChange();
         rerender(newId);
       }
 
@@ -1935,7 +2166,7 @@ export function setupLocalEditor(
         position.y + movement[1] * multiplier
       );
 
-      emitChanged(changed);
+      recordChange();
       rerender(id);
     }
 
@@ -1955,7 +2186,7 @@ export function setupLocalEditor(
 
       directEditor = makeDirectEditor(
         preview,
-        changed,
+        recordChange,
         id => rerender(id)
       );
 
@@ -1963,12 +2194,15 @@ export function setupLocalEditor(
         editableNodes(preview)[0]?.id || null;
 
       rerender(selectedId);
-      emitChanged(changed);
+      recordChange();
     },
 
     getState() {
       return state;
     },
+
+    undo,
+    redo,
 
     select(group) {
       const id = LEGACY_IDS[group] || group;

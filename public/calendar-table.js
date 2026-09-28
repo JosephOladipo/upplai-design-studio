@@ -6,8 +6,10 @@ import { createCalendarQueue, todayEligibleIds } from '/src/calendar-generation.
 import { calendarResultRef, saveCalendarAsset, loadCalendarAsset, removeCalendarAsset } from '/src/calendar-assets.js';
 import { generateCalendarDesign } from '/app.js';
 import { generateCarouselDesign } from '/carousel.js';
+import { generateMultiPageDesign } from '/multi-page.js';
 import { downloadPng, previewPngBlob } from '/src/export.js';
-import { beginLocalEdits, setupLocalEditor } from '/src/local-editor.js';
+import { showProcessing, hideProcessing } from '/src/processing.js';
+import { loadContentLibrary, createFolder, renameFolder, deleteFolder, assignFolder, setArchived, groupContentRows } from '/src/content-library.js';
 
 const labels = {
   ready: 'Ready',
@@ -42,6 +44,7 @@ const details = document.getElementById('calendar-details');
 const calendarStatus = document.getElementById('calendar-status');
 const generateSelected = document.getElementById('generate-selected-calendar');
 const generateToday = document.getElementById('generate-today-calendar');
+const librarySearch = document.getElementById('calendar-library-search'); const libraryStatus = document.getElementById('calendar-library-status'); const libraryFormat = document.getElementById('calendar-library-format'); const libraryDate = document.getElementById('calendar-library-date'); const libraryFolder = document.getElementById('calendar-library-folder'); const folderList = document.getElementById('calendar-folder-list'); const contentGroup = document.getElementById('calendar-content-group');
 
 const selectionButtons = [
   'select-all-calendar',
@@ -63,28 +66,24 @@ const reviewMessage = document.getElementById('calendar-review-message');
 const reviewDownload = document.getElementById('download-calendar-review');
 const reviewRegenerate = document.getElementById('regenerate-calendar-review');
 const reviewEditDesign = document.getElementById('edit-calendar-design');
-
-const reviewDesignEditor =
-  document.getElementById('calendar-review-design-editor');
-
-const reviewEditorControls =
-  document.getElementById('calendar-review-editor-controls');
-
-const reviewResetEdits =
-  document.getElementById('reset-calendar-design-edits');
-
-let reviewEditor = null;
-let reviewEditablePreview = null;
+const carouselReviewControls = document.getElementById('carousel-review-controls');
+const carouselReviewStrip = document.getElementById('carousel-review-strip');
+const carouselReviewPrevious = document.getElementById('carousel-review-previous');
+const carouselReviewNext = document.getElementById('carousel-review-next');
+const carouselReviewPosition = document.getElementById('carousel-review-position');
 let selectedIds = new Set();
 let detailId = null;
 let reviewId = null;
 let reviewObjectUrl = null;
+let carouselSlideIndex = 0;
 
 const sessionResults = new Map();
 
 const generateCalendarRow = row =>
   row.contentFormat === 'carousel'
     ? generateCarouselDesign(row.carousel)
+    : row.contentFormat === 'multi-page'
+      ? generateMultiPageDesign(row.multiPage)
     : generateCalendarDesign(row);
 
 const queue = createCalendarQueue(generateCalendarRow);
@@ -116,8 +115,12 @@ document.addEventListener('keydown', event => {
   }
 });
 
+['input','change'].forEach(type => [librarySearch, libraryStatus, libraryFormat, libraryDate, libraryFolder].forEach(control => control.addEventListener(type, render)));
+document.getElementById('calendar-add-folder').addEventListener('click', () => { const name = prompt('Folder name:'); if (!name) return; try { createFolder(name); render(); } catch (error) { calendarStatus.textContent = error.message; } });
+
 function render() {
   const currentRows = rows();
+  const library = loadContentLibrary();
   const loaded = currentRows.length > 0;
 
   empty.hidden = loaded;
@@ -166,9 +169,12 @@ function render() {
     button.disabled = queue.running;
   });
 
-  table.replaceChildren(
-    ...currentRows.map(rowElement)
-  );
+  libraryFolder.replaceChildren(new Option('All folders', '')); library.folders.forEach(folder => libraryFolder.add(new Option(folder.name, folder.id)));
+  const date = libraryDate.value; const query = librarySearch.value.toLowerCase();
+  let visible = currentRows.filter(row => date === 'archived' ? row.archived : !row.archived).filter(row => !libraryStatus.value || row.status === libraryStatus.value).filter(row => !libraryFormat.value || (row.contentFormat || 'single-image') === libraryFormat.value).filter(row => !libraryFolder.value || row.folderId === libraryFolder.value).filter(row => !query || `${row.headline} ${row.supportingCopy || ''} ${library.folders.find(folder => folder.id === row.folderId)?.name || ''}`.toLowerCase().includes(query)).filter(row => !date || date === 'archived' || date === 'today' && row.date === localDateKey() || date === 'upcoming' && row.date > localDateKey() || date === 'past' && row.date < localDateKey());
+  if (!query && !libraryStatus.value && !libraryFormat.value && !libraryFolder.value && !date) { const groups = groupContentRows(currentRows, localDateKey()); visible = [...groups.today, ...groups.upcoming, ...groups.library, ...groups.todayCompleted]; contentGroup.textContent = groups.today.length ? `Today — Needs Attention · ${groups.today.length} item${groups.today.length === 1 ? '' : 's'}` : 'No posts need attention today.'; } else contentGroup.textContent = `${visible.length} matching content item${visible.length === 1 ? '' : 's'}.`;
+  table.replaceChildren(...visible.map(rowElement));
+  folderList.replaceChildren(...library.folders.map(folder => { const item = document.createElement('span'); item.textContent = folder.name; const rename = document.createElement('button'); rename.textContent = 'Rename'; rename.onclick = () => { const name = prompt('Folder name:', folder.name); if (name) { renameFolder(folder.id, name); render(); } }; const remove = document.createElement('button'); remove.textContent = 'Delete'; remove.onclick = () => { if (confirm(`Delete ${folder.name}? Content will become Unfiled.`)) { saveCalendar(deleteFolder(folder.id, rows())); render(); } }; item.append(rename, remove); return item; }));
 
   renderDetails(
     currentRows.find(row => row.id === detailId)
@@ -250,9 +256,12 @@ function rowElement(row) {
   formatBadge.textContent =
     row.contentFormat === 'carousel'
       ? 'Carousel'
+      : row.contentFormat === 'multi-page'
+        ? 'Multi-Page'
       : 'Single';
 
   format.append(formatBadge);
+  if (row.folderId) { const folder = loadContentLibrary().folders.find(item => item.id === row.folderId); if (folder) { const badge = document.createElement('small'); badge.textContent = folder.name; format.append(badge); } }
 
   const state = document.createElement('td');
   const badge = document.createElement('span');
@@ -307,11 +316,13 @@ function rowElement(row) {
     menuItem('Edit content', () =>
       document.dispatchEvent(
         new CustomEvent('calendar:edit', {
-          detail: { id: row.id }
+          detail: { id: row.id, context: { source: 'CALENDAR', calendarItemId: row.id, contentType: row.contentFormat || 'single-image', resultRef: row.resultRef || '', designMode: row.carousel?.designMode || row.multiPage?.designMode || 'native', pageOrSlideIndex: 0, returnDestination: 'CALENDAR', row } }
         })
       )
     )
   );
+  const folderSelect = document.createElement('select'); folderSelect.add(new Option('Unfiled', '')); loadContentLibrary().folders.forEach(folder => folderSelect.add(new Option(folder.name, folder.id))); folderSelect.value = row.folderId || ''; folderSelect.onchange = () => { saveCalendar(assignFolder(rows(), row.id, folderSelect.value)); render(); }; items.append(folderSelect);
+  items.append(menuItem(row.archived ? 'Restore' : 'Archive', () => { saveCalendar(setArchived(rows(), row.id, !row.archived)); render(); }));
 
   if (['ready', 'stale'].includes(value)) {
     items.append(
@@ -337,10 +348,7 @@ function rowElement(row) {
     );
   }
 
-  if (
-    canReview &&
-    row.contentFormat !== 'carousel'
-  ) {
+  if (canReview) {
     items.append(
       menuItem('Send to Publish', () =>
         document.dispatchEvent(
@@ -574,6 +582,17 @@ function previewFromAsset(asset) {
   return template.content.firstElementChild;
 }
 
+function carouselFromAsset(asset) {
+  return {
+    type: 'carousel',
+    style: asset.style,
+    slides: (asset.slides || []).map(slide => ({
+      ...slide,
+      preview: previewFromAsset({ html: slide.html })
+    })).filter(slide => slide.preview)
+  };
+}
+
 async function resultFor(row) {
   const cached = sessionResults.get(row.id);
 
@@ -586,14 +605,14 @@ async function resultFor(row) {
 
   if (!asset) return null;
 
-  const preview = previewFromAsset(asset);
+  const result = ['carousel', 'multi-page'].includes(asset.type)
+    ? carouselFromAsset(asset)
+    : {
+        preview: previewFromAsset(asset),
+        style: asset.style || row.style
+      };
 
-  if (!preview) return null;
-
-  const result = {
-    preview,
-    style: asset.style || row.style
-  };
+  if (!['carousel', 'multi-page'].includes(asset.type) && !result.preview) return null;
 
   sessionResults.set(row.id, result);
 
@@ -609,13 +628,48 @@ function clearReviewPreview() {
   reviewPreview.replaceChildren();
 }
 
-async function openReview(row) {
-  reviewEditablePreview = null;
-  reviewEditor = null;
+function renderCarouselReview(row, result) {
+  const slides = result?.slides || [];
+  carouselSlideIndex = Math.min(carouselSlideIndex, Math.max(0, slides.length - 1));
+  const slide = slides[carouselSlideIndex];
 
-  reviewDesignEditor.hidden = true;
-  reviewEditDesign.textContent = 'Edit Design';
-  reviewEditorControls.replaceChildren();
+  carouselReviewControls.hidden = !slide;
+  carouselReviewStrip.hidden = !slide;
+
+  if (!slide) {
+    reviewPreview.textContent = 'Carousel slides could not be loaded.';
+    return;
+  }
+
+  reviewPreview.replaceChildren(slide.preview.cloneNode(true));
+  carouselReviewPosition.textContent =
+    'Slide ' + (carouselSlideIndex + 1) + ' of ' + slides.length;
+  carouselReviewPrevious.disabled = carouselSlideIndex === 0;
+  carouselReviewNext.disabled = carouselSlideIndex === slides.length - 1;
+  carouselReviewStrip.replaceChildren(...slides.map((item, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = index === carouselSlideIndex
+      ? 'carousel-review-thumbnail active'
+      : 'carousel-review-thumbnail';
+    button.textContent = String(index + 1);
+    button.title = 'Slide ' + (index + 1);
+    button.addEventListener('click', () => {
+      carouselSlideIndex = index;
+      renderCarouselReview(row, result);
+    });
+    return button;
+  }));
+
+  reviewEditDesign.textContent = 'Edit Slide';
+  reviewDownload.disabled = false;
+  reviewMessage.textContent = '';
+}
+
+async function openReview(row) {
+  if (reviewId !== row.id) {
+    carouselSlideIndex = 0;
+  }
 
   reviewId = row.id;
 
@@ -624,6 +678,9 @@ async function openReview(row) {
   review.hidden = false;
 
   clearReviewPreview();
+  carouselReviewControls.hidden = true;
+  carouselReviewStrip.hidden = true;
+  reviewEditDesign.textContent = 'Edit Design';
 
   reviewDownload.disabled = true;
 
@@ -666,18 +723,16 @@ async function openReview(row) {
     reviewMeta.append(field);
   }
 
-  reviewMessage.textContent =
-    row.contentFormat === 'carousel'
-      ? 'Carousel review will be added next.'
-      : 'Loading generated design…';
-
-  if (row.contentFormat === 'carousel') {
-    return;
-  }
+  reviewMessage.textContent = 'Loading generated design…';
 
   const result = await resultFor(row);
 
   if (reviewId !== row.id) {
+    return;
+  }
+
+  if (row.contentFormat === 'carousel') {
+    renderCarouselReview(row, result);
     return;
   }
 
@@ -827,6 +882,7 @@ async function regenerateReview() {
 
   render();
 
+  showProcessing({ title: 'Generating your designs…', message: 'Creating the selected Calendar content.' });
   try {
     const result =
       await generateCalendarDesign(generating);
@@ -876,6 +932,8 @@ async function regenerateReview() {
       failed.error;
 
     await openReview(failed);
+  } finally {
+    hideProcessing();
   }
 
   render();
@@ -951,15 +1009,13 @@ document
   .getElementById('edit-calendar-review')
   .addEventListener('click', () => {
     if (reviewId) {
+      const row = rows().find(item => item.id === reviewId);
       document.dispatchEvent(
         new CustomEvent('calendar:edit', {
-          detail: { id: reviewId }
+          detail: { id: reviewId, context: row ? { source: 'CALENDAR', calendarItemId: row.id, contentType: row.contentFormat || 'single-image', resultRef: row.resultRef || '', designMode: row.carousel?.designMode || row.multiPage?.designMode || 'native', pageOrSlideIndex: 0, returnDestination: 'CALENDAR', row } : null }
         })
       );
-
-      document.dispatchEvent(
-        new Event('navigate:calendar')
-      );
+      if (!row || !['carousel', 'multi-page'].includes(row.contentFormat)) document.dispatchEvent(new Event('navigate:calendar'));
     }
   });
 
@@ -995,15 +1051,21 @@ reviewDownload.addEventListener(
     const result =
       row && await resultFor(row);
 
-    if (!row || !result?.preview) {
+    const preview = row?.contentFormat === 'carousel'
+      ? result?.slides?.[carouselSlideIndex]?.preview
+      : result?.preview;
+
+    if (!row || !preview) {
       return;
     }
 
     try {
       await downloadPng(
-        result.preview,
+        preview,
         result.style || row.style,
-        reviewFilename(row)
+        row.contentFormat === 'carousel'
+          ? reviewFilename(row).replace(/\.png$/, '-slide-' + (carouselSlideIndex + 1) + '.png')
+          : reviewFilename(row)
       );
     } catch {
       reviewMessage.textContent =
@@ -1023,17 +1085,17 @@ reviewEditDesign.addEventListener(
       item => item.id === reviewId
     );
 
-    if (
-      !row ||
-      row.contentFormat === 'carousel'
-    ) {
-      return;
-    }
+    if (!row) return;
 
     const result =
       await resultFor(row);
 
-    if (!result?.preview) {
+    const carouselSlide =
+      row.contentFormat === 'carousel'
+        ? result?.slides?.[carouselSlideIndex]
+        : null;
+
+    if (!result?.preview && !carouselSlide?.preview) {
       reviewMessage.textContent =
         'The editable design is unavailable. Regenerate this design first.';
 
@@ -1048,13 +1110,27 @@ reviewEditDesign.addEventListener(
     // Then hand the generated design to
     // Create's full editor.
     requestAnimationFrame(() => {
+      if (carouselSlide) {
+        document.dispatchEvent(new CustomEvent('calendar:carousel-slide-edit', {
+          detail: {
+            id: row.id,
+            resultRef: row.resultRef,
+            style: result.style || row.style,
+            slideIndex: carouselSlideIndex,
+            preview: carouselSlide.preview
+          }
+        }));
+        return;
+      }
+
       document.dispatchEvent(
         new CustomEvent(
           'calendar:design-edit',
           {
             detail: {
               id: row.id,
-              preview: result.preview
+              preview: result.preview,
+              style: result.style || row.style
             }
           }
         )
@@ -1063,22 +1139,56 @@ reviewEditDesign.addEventListener(
   }
 );
 
-reviewResetEdits.addEventListener(
-  'click',
-  () => {
-    if (
-      !reviewEditor ||
-      !reviewEditablePreview
-    ) {
-      return;
-    }
+document.addEventListener('calendar:design-saved', event => {
+  const { id, resultRef, result } = event.detail || {};
+  const row = rows().find(item => item.id === id);
 
-    reviewEditor.reset();
+  if (!row || !result?.preview) return;
 
-    reviewMessage.textContent =
-      'Design edits reset to the original reviewed design.';
-  }
-);
+  row.resultRef = resultRef;
+  sessionResults.set(id, {
+    preview: result.preview.cloneNode(true),
+    style: result.style || row.style
+  });
+
+  render();
+  openReview(row);
+});
+
+document.addEventListener('calendar:carousel-slide-saved', event => {
+  const { id, resultRef, style, slideIndex, slides } = event.detail || {};
+  const row = rows().find(item => item.id === id);
+  if (!row || !Array.isArray(slides)) return;
+
+  carouselSlideIndex = slideIndex;
+  sessionResults.set(id, {
+    type: 'carousel',
+    style: style || row.style,
+    slides: slides.map(slide => ({
+      ...slide,
+      preview: slide.preview.cloneNode(true)
+    }))
+  });
+
+  row.resultRef = resultRef;
+  render();
+  openReview(row);
+});
+
+carouselReviewPrevious.addEventListener('click', async () => {
+  if (carouselSlideIndex <= 0) return;
+  carouselSlideIndex -= 1;
+  const row = rows().find(item => item.id === reviewId);
+  if (row) renderCarouselReview(row, await resultFor(row));
+});
+
+carouselReviewNext.addEventListener('click', async () => {
+  const row = rows().find(item => item.id === reviewId);
+  const result = row && await resultFor(row);
+  if (!row || carouselSlideIndex >= (result?.slides?.length || 0) - 1) return;
+  carouselSlideIndex += 1;
+  renderCarouselReview(row, result);
+});
 
 reviewRegenerate.addEventListener(
   'click',
@@ -1111,9 +1221,11 @@ async function runCalendarQueue(
   }
 
   render();
+  showProcessing({ title: 'Generating your designs…', message: 'Creating the selected Calendar content.' });
 
-  const result =
-    await queue.run(
+  let result;
+  try {
+    result = await queue.run(
       rows(),
       ids,
       async (
@@ -1177,6 +1289,9 @@ async function runCalendarQueue(
   }
 
   render();
+  } finally {
+    hideProcessing();
+  }
 }
 
 generateSelected.addEventListener(

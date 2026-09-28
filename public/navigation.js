@@ -22,9 +22,14 @@ const calendarSection =
   document.getElementById('section-calendar');
 const reviewSection = document.getElementById('section-review');
 const publishingSection = document.getElementById('section-publishing');
+const WORKSPACE_KEY = 'upplai-design-studio-active-workspace';
+const backButton = document.getElementById('app-back');
+let applyingHistory = false;
+const validWorkspaces = new Set(['create', 'brand', 'calendar', 'review', 'publishing']);
 
 
-function showSection(section) {
+function showSection(section, { history = true } = {}) {
+  section = validWorkspaces.has(section) ? section : 'create';
   const sections = {
     create: [createButton, createSection],
     brand: [brandButton, brandSection],
@@ -38,6 +43,9 @@ function showSection(section) {
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   }
+  try { localStorage.setItem(WORKSPACE_KEY, section); } catch { /* navigation remains usable without storage */ }
+  document.dispatchEvent(new CustomEvent('workspace:changed', { detail: { workspace: section } }));
+  if (history && !applyingHistory) { window.history.pushState({ workspace: section }, '', '#' + section); backButton.hidden = false; }
 }
 
 
@@ -61,8 +69,13 @@ publishingButton.addEventListener('click', () => showSection('publishing'));
 document.addEventListener('navigate:publishing', () => showSection('publishing'));
 document.addEventListener('navigate:review', () => showSection('review'));
 document.addEventListener('navigate:calendar', () => showSection('calendar'));
-document.addEventListener('navigate:create', () => showSection('create')); 
+document.addEventListener('navigate:create', () => showSection('create'));
+backButton.addEventListener('click', () => window.history.back());
+window.addEventListener('popstate', event => { applyingHistory = true; showSection(event.state?.workspace || 'create', { history: false }); applyingHistory = false; }); 
 
 
-// Start on Create Design.
-showSection('create');
+// Restore the last valid workspace; Create is the safe fallback.
+let restoredWorkspace = 'create';
+try { restoredWorkspace = localStorage.getItem(WORKSPACE_KEY) || 'create'; } catch { /* use fallback */ }
+window.history.replaceState({ workspace: restoredWorkspace }, '', '#' + restoredWorkspace);
+showSection(restoredWorkspace, { history: false });

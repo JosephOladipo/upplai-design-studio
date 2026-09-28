@@ -1,17 +1,32 @@
 import { loadCalendarAsset } from '/src/calendar-assets.js';
 import { previewPngBlob } from '/src/export.js';
+import { brand } from '/src/brand.js';
+import { showProcessing, hideProcessing } from '/src/processing.js';
+import { loadSavedCaptionPrompts, saveCaptionPrompt, renameCaptionPrompt, duplicateCaptionPrompt, deleteCaptionPrompt } from '/src/saved-caption-prompts.js';
 
 const state = {
   media: null,
   uploaded: null,
   generatedRef: null,
   generatedPreview: null,
+  generatedFile: null,
+  generatedPreviewUrl: null,
+  carouselSlides: [],
+  carouselIndex: 0,
   mediaSource: 'none',
   existingMedia: null,
   channels: new Set(),
   channelLabels: new Map(),
+  channelData: new Map(),
+  captionMode: 'generic',
+  platformCaptions: {},
+  altTextMode: 'generic',
+  platformAltText: {},
+  slideAltText: [],
+  contentContext: {},
   busy: false
 };
+let managementStatusName = 'composer';
 
 const q = (id) => document.getElementById(id);
 const caption = q('publishing-caption');
@@ -20,14 +35,55 @@ const button = q('publishing-prepare');
 const mediaInput = q('publishing-media-input');
 const mediaTrigger = q('publishing-media-trigger');
 const mediaBadge = q('publishing-media-badge');
+const mediaDropzone = q('publishing-media-dropzone');
 const modeSelect = q('publishing-mode');
+const altText = q('publishing-alt-text');
+const supportedManualMedia = new Set(['image/png','image/jpeg','image/webp','video/mp4','video/quicktime','video/webm']);
+const bytesLabel = bytes => `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`;
+const PUBLISHING_RECOVERY_KEY = 'upplai-design-studio-publishing-draft';
+function savePublishingDraft() { try { localStorage.setItem(PUBLISHING_RECOVERY_KEY, JSON.stringify({ caption: caption.value, instruction: q('publishing-ai-instruction').value, altText: altText.value, captionMode: state.captionMode, altTextMode: state.altTextMode, mode: modeSelect.value, date: q('publishing-date').value, time: q('publishing-time').value, channels: [...state.channels], tab: managementStatusName || 'composer', generatedRef: state.generatedRef || '' })); } catch { /* files and media are intentionally excluded */ } }
+function restorePublishingDraft() { try { const saved = JSON.parse(localStorage.getItem(PUBLISHING_RECOVERY_KEY)); if (!saved || typeof saved !== 'object') return; caption.value = String(saved.caption || ''); q('publishing-ai-instruction').value = String(saved.instruction || ''); altText.value = String(saved.altText || ''); state.captionMode = saved.captionMode === 'platform' ? 'platform' : 'generic'; state.altTextMode = saved.altTextMode === 'platform' ? 'platform' : 'generic'; modeSelect.value = saved.mode === 'schedule' ? 'schedule' : 'now'; q('publishing-date').value = String(saved.date || ''); q('publishing-time').value = String(saved.time || ''); (saved.channels || []).forEach(id => state.channels.add(id)); state.generatedRef = String(saved.generatedRef || '') || null; managementStatusName = ['scheduled','sent'].includes(saved.tab) ? saved.tab : 'composer'; } catch { /* invalid recovery data is ignored */ } }
 
 q('publishing-timezone').textContent = `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+restorePublishingDraft();
 
 function channelLabel(channel) {
   const service = String(channel.service || 'Channel');
   const serviceName = service.charAt(0).toUpperCase() + service.slice(1);
   return `${serviceName} — ${channel.name || 'Connected channel'}`;
+}
+
+function channelKey(channel) { return String(channel.connectionId || 'legacy') + ':' + String(channel.id || ''); }
+function selectedPlatforms() { return [...state.channels].map(id => ({ key: id, ...(state.channelData.get(id) || {}) })).filter(channel => channel.id); }
+function renderCaptionPrompts(selectedId = '') { const select = q('caption-prompt-select'); if (!select) return; const prompts = loadSavedCaptionPrompts(); select.replaceChildren(new Option('Select Saved Prompt', ''), ...prompts.map(item => new Option(item.name, item.id))); select.value = selectedId; }
+function selectedCaptionPrompt() { const id = q('caption-prompt-select')?.value; return loadSavedCaptionPrompts().find(item => item.id === id) || null; }
+function manageCaptionPrompt(action) { const instruction = q('publishing-ai-instruction'); const current = selectedCaptionPrompt(); try { if (action === 'save') { const name = prompt('Saved caption prompt name:'); if (!name) return; const item = saveCaptionPrompt(name, instruction.value); renderCaptionPrompts(item.id); } if (action === 'rename') { if (!current) return; const name = prompt('Rename saved caption prompt:', current.name); if (!name) return; renameCaptionPrompt(current.id, name); renderCaptionPrompts(current.id); } if (action === 'duplicate') { if (!current) return; const item = duplicateCaptionPrompt(current.id); renderCaptionPrompts(item.id); } if (action === 'delete') { if (!current || !confirm(`Delete saved caption prompt "${current.name}"?`)) return; deleteCaptionPrompt(current.id); renderCaptionPrompts(); } } catch (error) { q('publishing-ai-status').textContent = error.message || 'Saved prompt could not be updated.'; } }
+function assistantPayload(mode = state.captionMode) { return { mode, platforms: selectedPlatforms().map(channel => ({ ...channel, channelId: channel.id, id: channel.key })), sourceCaption: caption.value, instruction: q('publishing-ai-instruction').value, controls: { tone: q('publishing-ai-tone').value, length: q('publishing-ai-length').value, hashtags: q('publishing-ai-hashtags').value }, context: state.contentContext }; }
+function makeButton(id, text, action) { const value = document.createElement('button'); value.type = 'button'; value.textContent = text; value.onclick = action; return value; }
+function renderOptions(host, options, use) { host.replaceChildren(...options.map(option => { const card = document.createElement('article'); card.className = 'publishing-ai-option'; const label = document.createElement('strong'); label.textContent = option.label || 'Option'; const copy = document.createElement('p'); copy.textContent = option.text || ''; card.append(label, copy, makeButton('', 'Use Caption', () => use(option.text || ''))); return card; })); }
+function renderCopyWorkspaces() {
+  const platformCaptions = q('publishing-platform-captions'); const platformAlt = q('publishing-platform-alt-text'); const selected = selectedPlatforms();
+  const platformMode = state.captionMode === 'platform'; const altMode = state.altTextMode === 'platform';
+  q('publishing-generic-caption-label').hidden = platformMode; platformCaptions.hidden = !platformMode;
+  q('publishing-generic-alt-label').hidden = altMode; platformAlt.hidden = !altMode;
+  q('publishing-ai-generic').hidden = platformMode; q('publishing-ai-copy').hidden = !platformMode; q('publishing-ai-platform').hidden = !platformMode;
+  q('caption-mode-generic').classList.toggle('active', !platformMode); q('caption-mode-platform').classList.toggle('active', platformMode);
+  q('alt-mode-generic').classList.toggle('active', !altMode); q('alt-mode-platform').classList.toggle('active', altMode);
+  if (platformMode) platformCaptions.replaceChildren(...selected.map(channel => { const wrap = document.createElement('label'); wrap.className = 'publishing-platform-copy'; const title = document.createElement('strong'); title.textContent = channelLabel(channel); const input = document.createElement('textarea'); input.rows = 4; input.value = state.platformCaptions[channel.key] || ''; input.oninput = () => { state.platformCaptions[channel.key] = input.value; }; const regenerate = makeButton('', `Regenerate ${String(channel.service || 'platform').replace(/^./, x => x.toUpperCase())}`, () => generateOnePlatform(channel)); wrap.append(title, input, regenerate); return wrap; }));
+  if (altMode) platformAlt.replaceChildren(...selected.map(channel => { const wrap = document.createElement('label'); wrap.className = 'publishing-platform-copy'; const title = document.createElement('strong'); title.textContent = `${channelLabel(channel)} Alt Text`; const input = document.createElement('textarea'); input.rows = 3; input.maxLength = 500; input.value = state.platformAltText[channel.key] || ''; input.oninput = () => { state.platformAltText[channel.key] = input.value; }; wrap.append(title, input); return wrap; }));
+  if (state.slideAltText.length) { const slides = document.createElement('div'); slides.className = 'publishing-carousel-alt'; state.slideAltText.forEach((value, index) => { const label = document.createElement('label'); label.textContent = `Slide ${index + 1} Alt Text`; const input = document.createElement('textarea'); input.rows = 3; input.maxLength = 500; input.value = value; input.oninput = () => { state.slideAltText[index] = input.value; }; label.append(input); slides.append(label); }); platformAlt.hidden = false; platformAlt.replaceChildren(makeButton('', '✨ Generate Alt Text for All Slides', () => generateAssistant('alt')), slides); q('publishing-ai-alt').hidden = true; } else q('publishing-ai-alt').hidden = altMode;
+}
+async function generateAssistant(kind, platformOnly = false) {
+  const status = q(kind === 'caption' ? 'publishing-ai-status' : 'publishing-alt-status'); const trigger = q(kind === 'caption' ? (platformOnly ? 'publishing-ai-platform' : 'publishing-ai-generic') : 'publishing-ai-alt');
+  trigger.disabled = true; showProcessing({ title: kind === 'caption' ? 'Writing your captions…' : (state.carouselSlides.length ? 'Generating slide descriptions…' : 'Generating Alt Text…'), message: kind === 'caption' ? 'Creating caption options for your selected channels.' : (state.carouselSlides.length ? 'Creating accessibility descriptions for each carousel slide.' : 'Creating an accessibility description for your content.') }); status.textContent = kind === 'caption' ? (platformOnly ? 'Generating platform variations…' : 'Generating caption options…') : 'Generating Alt Text…';
+  try { const response = await fetch(`/api/ai/generate-${kind === 'caption' ? 'caption' : 'alt-text'}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(assistantPayload(platformOnly ? 'platform' : state.captionMode)) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.');
+    if (kind === 'caption') { const host = q('publishing-ai-results'); if (platformOnly) { host.replaceChildren(...selectedPlatforms().flatMap(channel => { const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const options = data.platformCaptions?.[channel.key] || []; const container = document.createElement('div'); renderOptions(container, options, text => { state.platformCaptions[channel.key] = text; renderCopyWorkspaces(); }); return [heading, container]; })); } else renderOptions(host, data.options || [], text => { caption.value = text; }); } else if (data.slideAltText) { state.slideAltText = data.slideAltText; status.textContent = 'Alt Text generated for all carousel slides.'; } else { altText.value = data.altText || ''; }
+    if (kind === 'caption') status.textContent = 'Caption options are ready. Choose one to use it.'; else if (!data.slideAltText) status.textContent = 'Alt Text is ready to edit.';
+  } catch (error) { status.textContent = error.message || 'AI generation failed. Your existing content is unchanged.'; } finally { hideProcessing(); trigger.disabled = false; }
+}
+async function generateOnePlatform(channel) {
+  const status = q('publishing-ai-status'); showProcessing({ title: 'Writing your captions…', message: 'Creating caption options for your selected channels.' }); status.textContent = `Generating ${channel.service || 'platform'} variations…`;
+  try { const response = await fetch('/api/ai/generate-caption', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...assistantPayload('platform'), platforms: [channel] }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.'); const options = data.platformCaptions?.[channel.key] || []; const host = q('publishing-ai-results'); const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const result = document.createElement('div'); renderOptions(result, options, text => { state.platformCaptions[channel.key] = text; renderCopyWorkspaces(); }); host.replaceChildren(heading, result); status.textContent = `${channel.service || 'Platform'} options are ready.`; } catch (error) { status.textContent = error.message || 'AI generation failed. Your caption is unchanged.'; } finally { hideProcessing(); }
 }
 
 function setMediaState(source, message = 'Text-only post') {
@@ -40,11 +96,42 @@ function setMediaState(source, message = 'Text-only post') {
   if (source === 'none') q('publishing-media').textContent = message;
 }
 
+function clearGeneratedMedia() {
+  if (state.generatedPreviewUrl) URL.revokeObjectURL(state.generatedPreviewUrl);
+  state.generatedPreviewUrl = null;
+  state.generatedFile = null;
+  state.generatedPreview = null;
+}
+
+function prepareGeneratedMediaPreview() {
+  if (!state.generatedPreview) throw new Error('Generated design could not be loaded. Return to Design Review and regenerate it.');
+  // Show the exact saved HTML immediately. PNG conversion is deferred until the
+  // user explicitly publishes, so rendering failures cannot block the handoff.
+  state.generatedFile = null;
+  const visiblePreview = state.generatedPreview.cloneNode(true);
+  visiblePreview.removeAttribute('id');
+  visiblePreview.setAttribute('aria-label', 'Generated design ready to publish');
+  q('publishing-media').replaceChildren(visiblePreview);
+}
+function renderPublishingCarousel() {
+  const slides = state.carouselSlides;
+  if (!slides.length) return;
+  const media = q('publishing-media'); const wrap = document.createElement('div'); wrap.className = 'publishing-carousel-preview';
+  const stage = document.createElement('div'); stage.className = 'publishing-carousel-stage'; stage.append(slides[state.carouselIndex].cloneNode(true));
+  const nav = document.createElement('div'); nav.className = 'publishing-carousel-nav';
+  const previous = makeButton('', '←', () => { state.carouselIndex = Math.max(0, state.carouselIndex - 1); renderPublishingCarousel(); });
+  const position = document.createElement('span'); position.textContent = `${state.carouselIndex + 1} / ${slides.length}`;
+  const next = makeButton('', '→', () => { state.carouselIndex = Math.min(slides.length - 1, state.carouselIndex + 1); renderPublishingCarousel(); });
+  previous.disabled = state.carouselIndex === 0; next.disabled = state.carouselIndex === slides.length - 1; nav.append(previous, position, next);
+  const thumbs = document.createElement('div'); thumbs.className = 'publishing-carousel-thumbs'; slides.forEach((slide, index) => { const thumb = makeButton('', String(index + 1), () => { state.carouselIndex = index; renderPublishingCarousel(); }); thumb.classList.toggle('active', index === state.carouselIndex); thumbs.append(thumb); });
+  wrap.append(stage, nav, thumbs); media.replaceChildren(wrap);
+}
+
 function syncModeControl() {
   const schedule = modeSelect.value === 'schedule';
   q('publishing-schedule').hidden = !schedule;
   button.textContent = schedule ? 'Schedule Post' : 'Publish Now';
-  document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
+    document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
     const active = control.dataset.publishingMode === modeSelect.value;
     control.classList.toggle('active', active);
     control.setAttribute('aria-pressed', String(active));
@@ -52,6 +139,7 @@ function syncModeControl() {
 }
 
 async function loadChannels() {
+  const retry = q('publishing-retry-channels'); retry.hidden = true;
   try {
     const response = await fetch('/api/buffer/channels');
     const data = await response.json();
@@ -59,7 +147,10 @@ async function loadChannels() {
 
     const channels = data.channels || [];
     q('publishing-status').textContent = `${channels.length} channel${channels.length === 1 ? '' : 's'} connected`;
-    state.channelLabels.clear();
+    const connectionHost = q('publishing-connections');
+    connectionHost.replaceChildren(...(data.connections || []).map(connection => { const item = document.createElement('small'); item.className = `publishing-connection ${connection.status || 'connected'}`; item.textContent = `${connection.name} · ${connection.status === 'connected' ? `Connected · ${connection.channelCount} channels` : 'Connection error'}`; return item; }));
+    if (data.duplicates?.length) connectionHost.append(Object.assign(document.createElement('small'), { className: 'publishing-connection warning', textContent: `${data.duplicates.length} duplicate destination hidden to prevent double publishing.` }));
+    state.channelLabels.clear(); state.channelData.clear();
     q('publishing-channels').replaceChildren(...channels.map((channel) => {
       const row = document.createElement('label');
       const input = document.createElement('input');
@@ -69,55 +160,111 @@ async function loadChannels() {
 
       row.className = 'publishing-channel';
       input.type = 'checkbox';
-      input.value = channel.id;
+      const key = channelKey(channel);
+      input.value = key;
       service.textContent = String(channel.service || 'Channel').replace(/^./, (letter) => letter.toUpperCase());
       name.textContent = channel.name || 'Connected channel';
       copy.append(service, name);
-      input.onchange = () => input.checked ? state.channels.add(channel.id) : state.channels.delete(channel.id);
-      state.channelLabels.set(channel.id, channelLabel(channel));
+      input.checked = state.channels.has(key);
+      input.onchange = () => { input.checked ? state.channels.add(key) : state.channels.delete(key); savePublishingDraft(); renderCopyWorkspaces(); };
+      state.channelLabels.set(key, channelLabel(channel));
+      state.channelData.set(key, channel);
       row.append(input, copy);
       return row;
     }));
-  } catch {
-    q('publishing-status').textContent = 'Channels unavailable';
+  } catch (error) {
+    q('publishing-status').textContent = 'Unable to load connected channels.';
+    const connectionHost = q('publishing-connections');
+    if (connectionHost) connectionHost.replaceChildren(Object.assign(document.createElement('small'), { className: 'publishing-connection error', textContent: 'Connection error. Retry channel loading to continue.' }));
+    q('publishing-channels').replaceChildren(Object.assign(document.createElement('p'), { className: 'hint', textContent: 'No channels are available. Caption, media, and other composer controls remain available.' }));
+    retry.hidden = false;
   }
 }
 
 async function uploadOnce() {
   if (state.uploaded) return state.uploaded;
   if (state.mediaSource === 'existing-url') return state.existingMedia;
+  if (state.carouselSlides.length) {
+    showProcessing({ title: 'Uploading your media…', message: 'Preparing your carousel slides for publishing.' });
+    try {
+      const items = [];
+      for (let index = 0; index < state.carouselSlides.length; index += 1) {
+        const blob = await previewPngBlob(state.carouselSlides[index]);
+        const form = new FormData();
+        form.append('media', new File([blob], `carousel-slide-${String(index + 1).padStart(2, '0')}.png`, { type: 'image/png' }));
+        const response = await fetch('/api/media/upload', { method: 'POST', body: form });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || 'Carousel media upload failed.');
+        items.push({ ...data.media, resourceType: 'image', slideIndex: index });
+      }
+      state.uploaded = { type: 'carousel', items };
+      return state.uploaded;
+    } finally {
+      hideProcessing();
+    }
+  }
   if (state.mediaSource === 'generated') {
     if (!state.generatedPreview) throw new Error('Generated design could not be loaded. Return to Design Review and regenerate it.');
     const blob = await previewPngBlob(state.generatedPreview);
-    state.media = new File([blob], 'generated-design.png', { type: 'image/png' });
+    state.generatedFile = new File([blob], 'generated-design.png', { type: 'image/png' });
+    state.media = state.generatedFile;
   }
   if (!state.media) return null;
 
   const form = new FormData();
   form.append('media', state.media);
-  const response = await fetch('/api/media/upload', { method: 'POST', body: form });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || 'Media upload failed.');
-  state.uploaded = data.media;
-  return state.uploaded;
+  showProcessing({ title: 'Uploading your media…', message: state.carouselSlides.length ? 'Preparing your carousel slides for publishing.' : 'Preparing your media for publishing.' });
+  try {
+    const response = await fetch('/api/media/upload', { method: 'POST', body: form });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'Media upload failed.');
+    state.uploaded = data.media;
+    return state.uploaded;
+  } finally {
+    hideProcessing();
+  }
 }
 
 function reset() {
   state.media = null;
   state.uploaded = null;
   state.generatedRef = null;
-  state.generatedPreview = null;
+  clearGeneratedMedia();
+  state.carouselSlides = [];
   state.existingMedia = null;
   state.channels.clear();
+  state.platformCaptions = {}; state.platformAltText = {}; state.slideAltText = []; state.contentContext = {};
   caption.value = '';
+  altText.value = '';
   mediaInput.value = '';
   out.textContent = '';
   q('publishing-channels').querySelectorAll('input').forEach((input) => { input.checked = false; });
   setMediaState('none');
+  renderCopyWorkspaces();
 }
 
 q('publishing-new').onclick = reset;
+q('caption-prompt-select').onchange = () => { const item = selectedCaptionPrompt(); if (item) q('publishing-ai-instruction').value = item.prompt; };
+q('caption-prompt-save').onclick = () => manageCaptionPrompt('save');
+q('caption-prompt-rename').onclick = () => manageCaptionPrompt('rename');
+q('caption-prompt-duplicate').onclick = () => manageCaptionPrompt('duplicate');
+q('caption-prompt-delete').onclick = () => manageCaptionPrompt('delete');
+renderCaptionPrompts();
+q('caption-mode-generic').onclick = () => { state.captionMode = 'generic'; renderCopyWorkspaces(); };
+q('caption-mode-platform').onclick = () => { state.captionMode = 'platform'; renderCopyWorkspaces(); };
+q('alt-mode-generic').onclick = () => { state.altTextMode = 'generic'; renderCopyWorkspaces(); };
+q('alt-mode-platform').onclick = () => { state.altTextMode = 'platform'; renderCopyWorkspaces(); };
+q('publishing-ai-generic').onclick = () => generateAssistant('caption');
+q('publishing-ai-platform').onclick = () => generateAssistant('caption', true);
+q('publishing-ai-copy').onclick = () => { selectedPlatforms().forEach(channel => { state.platformCaptions[channel.key] = caption.value; }); renderCopyWorkspaces(); };
+q('publishing-ai-alt').onclick = () => generateAssistant('alt');
 mediaTrigger.onclick = () => mediaInput.click();
+mediaDropzone.onclick = event => { if (event.target !== mediaTrigger) mediaInput.click(); };
+mediaDropzone.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mediaInput.click(); } };
+['dragenter','dragover'].forEach(type => mediaDropzone.addEventListener(type, event => { event.preventDefault(); mediaDropzone.classList.add('dragging'); }));
+['dragleave','drop'].forEach(type => mediaDropzone.addEventListener(type, event => { event.preventDefault(); mediaDropzone.classList.remove('dragging'); }));
+mediaDropzone.addEventListener('drop', event => { const files = event.dataTransfer?.files; if (!files?.length) return; const transfer = new DataTransfer(); transfer.items.add(files[0]); mediaInput.files = transfer.files; mediaInput.dispatchEvent(new Event('change')); });
+q('publishing-retry-channels').onclick = loadChannels;
 modeSelect.onchange = syncModeControl;
 document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
   control.onclick = () => {
@@ -129,22 +276,26 @@ document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
 mediaInput.onchange = (event) => {
   const file = event.target.files[0];
   if (!file) return;
+  if (!supportedManualMedia.has(file.type)) { out.textContent = 'Use PNG, JPG, WebP, MP4, MOV, or WebM media.'; mediaInput.value = ''; return; }
   state.media = file;
   state.uploaded = null;
   state.generatedRef = null;
-  state.generatedPreview = null;
+  clearGeneratedMedia();
+  state.carouselSlides = [];
   state.existingMedia = null;
   setMediaState('manual');
   const url = URL.createObjectURL(file);
-  q('publishing-media').innerHTML = file.type.startsWith('video/')
-    ? `<video controls src="${url}"></video>`
-    : `<img src="${url}" alt="Selected media preview">`;
+  const holder = q('publishing-media'); holder.replaceChildren();
+  const media = document.createElement(file.type.startsWith('video/') ? 'video' : 'img'); media.src = url; if (media.tagName === 'VIDEO') { media.controls = true; media.onloadedmetadata = () => { const meta = document.createElement('small'); meta.className = 'publishing-media-meta'; meta.textContent = `${file.name} · ${bytesLabel(file.size)} · ${Math.round(media.duration || 0)} seconds`; holder.append(meta); }; } else media.alt = 'Selected media preview'; holder.append(media); if (media.tagName !== 'VIDEO') { const meta = document.createElement('small'); meta.className = 'publishing-media-meta'; meta.textContent = `${file.name} · ${bytesLabel(file.size)}`; holder.append(meta); }
 };
 
 button.onclick = async () => {
   if (state.busy) return;
-  if (!caption.value.trim() || !state.channels.size) {
-    out.textContent = 'Add a caption and select at least one channel.';
+  const selected = selectedPlatforms();
+  const missingPlatformCaption = state.captionMode === 'platform' && selected.some(channel => !(state.platformCaptions[channel.key] || '').trim());
+  const activeCaption = state.captionMode === 'platform' ? (missingPlatformCaption ? '' : (caption.value.trim() || state.platformCaptions[selected[0]?.id] || '')) : caption.value;
+  if (!activeCaption.trim() || !state.channels.size) {
+    out.textContent = state.captionMode === 'platform' && missingPlatformCaption ? 'Add a caption for every selected channel.' : 'Add a caption and select at least one channel.';
     return;
   }
 
@@ -165,16 +316,21 @@ button.onclick = async () => {
   if (!confirm(confirmation)) return;
 
   state.busy = true;
+  showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: state.carouselSlides.length ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
   button.disabled = true;
   button.textContent = schedule ? 'Scheduling...' : 'Publishing...';
   try {
     const media = await uploadOnce();
+    showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: state.carouselSlides.length ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
     const response = await fetch('/api/publishing/posts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        text: caption.value,
-        channelIds: [...state.channels],
+        text: activeCaption,
+        tiktokTitle: state.contentContext.headline || '',
+        ...(state.captionMode === 'platform' ? { channelTexts: Object.fromEntries(selectedPlatforms().map(channel => [channel.key, state.platformCaptions[channel.key] || caption.value]).filter(([, text]) => text.trim())) } : {}),
+        accessibility: { altTextMode: state.altTextMode, genericAltText: altText.value, platformAltText: state.platformAltText, carouselSlideAltText: state.slideAltText },
+        destinations: selectedPlatforms().map(channel => ({ connectionId: channel.connectionId || 'legacy', channelId: channel.id })),
         mode: schedule ? 'customScheduled' : 'shareNow',
         ...(dueAt ? { dueAt } : {}),
         ...(media ? { media } : {})
@@ -183,7 +339,7 @@ button.onclick = async () => {
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || 'Publishing failed.');
     out.textContent = data.results.map((result) => {
-      const label = state.channelLabels.get(result.channelId) || 'Selected channel';
+      const label = state.channelLabels.get(`${result.connectionId || 'legacy'}:${result.channelId}`) || 'Selected channel';
       return result.success
         ? `✓ ${label}\n  ${schedule ? 'Scheduled successfully' : 'Published successfully'}`
         : `✕ ${label}\n  ${result.error}`;
@@ -191,6 +347,7 @@ button.onclick = async () => {
   } catch (error) {
     out.textContent = error.message;
   } finally {
+    hideProcessing();
     state.busy = false;
     button.disabled = false;
     syncModeControl();
@@ -198,37 +355,49 @@ button.onclick = async () => {
 };
 
 document.addEventListener('publishing:generated', async (event) => {
-  const result = event.detail;
+  const result = event.detail || {};
+  showProcessing({ title: 'Preparing Publishing…', message: 'Loading your prepared design.' });
+  try {
+  console.info('[CAROUSEL PUBLISH] 7. Publishing received handoff');
   state.media = null;
   state.uploaded = null;
-  state.generatedRef = result.resultRef;
-  state.generatedPreview = null;
+  state.generatedRef = result.resultRef || null;
+  state.contentContext = { ...state.contentContext, source: result.source || 'unknown', contentType: result.contentType || result.contentFormat || 'single-image', itemId: result.itemId || result.id || null, resultRef: result.resultRef || '' };
+  clearGeneratedMedia();
+  state.carouselSlides = [];
   state.existingMedia = null;
   mediaInput.value = '';
   caption.value = [result.headline, result.supportingCopy, result.cta].filter(Boolean).join('\n\n');
+  state.contentContext = { ...state.contentContext, headline: result.headline || '', supportingCopy: result.supportingCopy || '', cta: result.cta || '', carousel: result.carousel || null, brand: { name: brand.name || 'Upplai' } };
+  state.slideAltText = Array.isArray(result.carousel?.slides) ? result.carousel.slides.map(() => '') : [];
 
   const asset = await loadCalendarAsset(result.resultRef);
-  if (!asset) {
-    setMediaState('none', 'Generated design could not be loaded. Return to Design Review and regenerate it.');
-    out.textContent = 'Generated design could not be loaded. Return to Design Review and regenerate it.';
-  } else {
+  if (!asset) throw new Error('Generated design could not be loaded. Return to Design Review and regenerate it.');
+  {
     const template = document.createElement('template');
-    template.innerHTML = asset.html;
+    template.innerHTML = ['carousel', 'multi-page'].includes(asset.type) ? asset.slides?.[0]?.html || '' : asset.html;
     state.generatedPreview = template.content.firstElementChild;
-    q('publishing-media').replaceChildren(state.generatedPreview.cloneNode(true));
-    setMediaState('generated');
-    out.textContent = 'Generated design ready for publishing.';
+    if (!state.generatedPreview) throw new Error('Generated design could not be loaded. Return to Design Review and regenerate it.');
+    if (['carousel', 'multi-page'].includes(asset.type)) { state.carouselSlides = (asset.slides || []).map(slide => { const node = document.createElement('template'); node.innerHTML = slide.html; return node.content.firstElementChild; }); if (!state.carouselSlides.length || state.carouselSlides.some(slide => !slide)) throw new Error('Generated carousel could not be loaded. Return to Carousel and try again.'); state.carouselIndex = 0; renderPublishingCarousel(); } else prepareGeneratedMediaPreview(); setMediaState('generated'); out.textContent = asset.type === 'carousel' ? 'Carousel loaded with all slides. Publishing will upload them in this order when you confirm.' : asset.type === 'multi-page' ? 'Multi-page design loaded with all pages. Publishing will upload them in this order when you confirm.' : 'Generated design ready for publishing.';
   }
+  renderCopyWorkspaces();
   document.dispatchEvent(new Event('navigate:publishing'));
+  console.info('[CAROUSEL PUBLISH] 8. complete');
+  } catch (error) {
+    setMediaState('none', error.message || 'Generated design could not be loaded.');
+    out.textContent = error.message || 'Generated design could not be loaded.';
+    console.error('[CAROUSEL PUBLISH] Publishing handoff failed', error);
+  } finally { hideProcessing(); }
 });
 
 syncModeControl();
+renderCopyWorkspaces();
 loadChannels();
 const management = q('publishing-management');
 const composer = q('publishing-composer');
 const managementList = q('publishing-management-list');
 const managementStatus = q('publishing-management-status');
-let managementStatusName = 'scheduled';
+
 
 function localDate(value) {
   const date = new Date(value);
@@ -250,8 +419,8 @@ function scheduleAgain(post) {
   reset();
   caption.value = post.text || '';
   if (post.channelId) {
-    state.channels.add(post.channelId);
-    q('publishing-channels').querySelectorAll('input').forEach(input => { input.checked = input.value === post.channelId; });
+    state.channels.add(`${post.connectionId || 'legacy'}:${post.channelId}`);
+    q('publishing-channels').querySelectorAll('input').forEach(input => { input.checked = input.value === `${post.connectionId || 'legacy'}:${post.channelId}`; });
   }
   const media = post.assets?.[0];
   if (media?.url) {
@@ -281,11 +450,11 @@ function postCard(post) {
       const date = document.createElement('input'); date.type = 'date'; const time = document.createElement('input'); time.type = 'time';
       const current = new Date(post.dueAt); if (!Number.isNaN(current.getTime())) { date.value = current.toLocaleDateString('en-CA'); time.value = current.toTimeString().slice(0, 5); }
       const save = document.createElement('button'); save.type = 'button'; save.textContent = 'Save new time';
-      save.onclick = async () => { const local = `${date.value}T${time.value}`; if (!date.value || !time.value || Number.isNaN(Date.parse(local)) || Date.parse(local) <= Date.now()) { managementStatus.textContent = 'Choose a future schedule time.'; return; } try { const response = await fetch(`/api/buffer/posts/${encodeURIComponent(post.id)}/reschedule`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dueAt: new Date(local).toISOString() }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message); managementStatus.textContent = 'Post rescheduled successfully.'; loadManagement(); } catch (error) { managementStatus.textContent = error.message || 'Buffer could not reschedule this post.'; } };
+      save.onclick = async () => { const local = `${date.value}T${time.value}`; if (!date.value || !time.value || Number.isNaN(Date.parse(local)) || Date.parse(local) <= Date.now()) { managementStatus.textContent = 'Choose a future schedule time.'; return; } try { const response = await fetch(`/api/buffer/posts/${encodeURIComponent(post.id)}/reschedule`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dueAt: new Date(local).toISOString(), connectionId: post.connectionId || 'legacy' }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message); managementStatus.textContent = 'Post rescheduled successfully.'; loadManagement(); } catch (error) { managementStatus.textContent = error.message || 'Buffer could not reschedule this post.'; } };
       const close = document.createElement('button'); close.type = 'button'; close.textContent = 'Cancel'; close.onclick = () => { form.remove(); reschedule.disabled = false; };
       form.append(date, time, save, close); card.append(form); reschedule.disabled = true;
     };
-    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel'; cancel.onclick = async () => { if (!confirm('Cancel this scheduled post? It will be removed from Buffer’s queue.')) return; try { const response = await fetch(`/api/buffer/posts/${encodeURIComponent(post.id)}`, { method: 'DELETE' }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message); managementStatus.textContent = 'Scheduled post cancelled.'; loadManagement(); } catch (error) { managementStatus.textContent = error.message || 'Buffer could not cancel this post.'; } };
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel'; cancel.onclick = async () => { if (!confirm('Cancel this scheduled post? It will be removed from Buffer’s queue.')) return; try { const response = await fetch(`/api/buffer/posts/${encodeURIComponent(post.id)}?connectionId=${encodeURIComponent(post.connectionId || 'legacy')}`, { method: 'DELETE' }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message); managementStatus.textContent = 'Scheduled post cancelled.'; loadManagement(); } catch (error) { managementStatus.textContent = error.message || 'Buffer could not cancel this post.'; } };
     actions.prepend(reschedule, cancel);
   }
   card.append(managementMedia(post), copy, actions); return card;
@@ -298,7 +467,9 @@ async function loadManagement() {
 function showPublishingTab(tab) {
   document.querySelectorAll('[data-publishing-tab]').forEach(button => { const active = button.dataset.publishingTab === tab; button.classList.toggle('active', active); button.setAttribute('aria-selected', String(active)); });
   composer.hidden = tab !== 'composer'; management.hidden = tab === 'composer';
-  if (tab !== 'composer') { managementStatusName = tab === 'scheduled' ? 'scheduled' : 'sent'; q('publishing-management-title').textContent = tab === 'scheduled' ? 'Scheduled' : 'Published'; loadManagement(); }
+      if (tab !== 'composer') { managementStatusName = tab === 'scheduled' ? 'scheduled' : 'sent'; q('publishing-management-title').textContent = tab === 'scheduled' ? 'Scheduled' : 'Published'; loadManagement(); }
 }
 document.querySelectorAll('[data-publishing-tab]').forEach(button => { button.onclick = () => showPublishingTab(button.dataset.publishingTab); });
 q('publishing-management-refresh').onclick = loadManagement;
+caption.addEventListener('input', savePublishingDraft); altText.addEventListener('input', savePublishingDraft); q('publishing-ai-instruction').addEventListener('input', savePublishingDraft); modeSelect.addEventListener('change', savePublishingDraft); q('publishing-date').addEventListener('input', savePublishingDraft); q('publishing-time').addEventListener('input', savePublishingDraft);
+if (managementStatusName !== 'composer') showPublishingTab(managementStatusName);

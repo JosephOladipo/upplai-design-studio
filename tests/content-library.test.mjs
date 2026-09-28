@@ -1,0 +1,5 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createFolder, renameFolder, deleteFolder, assignFolder, setArchived, groupContentRows } from '../src/content-library.js';
+const memory=()=>{const m=new Map;return{getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v)}};
+test('content library folders, archive, and priority groups preserve calendar rows',()=>{const storage=memory();const {folder}=createFolder('Resume Tips',storage);renameFolder(folder.id,'Resume Series',storage);const rows=[{id:'past',date:'2026-09-20',order:0,status:'generated',resultRef:'asset-a'},{id:'today',date:'2026-09-27',order:1,status:'ready'},{id:'future',date:'2026-09-28',order:2,status:'ready'}];const assigned=assignFolder(rows,'past',folder.id);const groups=groupContentRows(assigned,'2026-09-27');assert.equal(groups.today[0].id,'today');assert.equal(groups.upcoming[0].id,'future');assert.equal(groups.library[0].id,'past');const archived=setArchived(assigned,'past',true);assert.equal(archived[0].resultRef,'asset-a');assert.equal(deleteFolder(folder.id,archived,storage)[0].folderId,null);});

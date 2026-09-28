@@ -6,13 +6,22 @@ const fs = require('node:fs');
 // Tiny .env loader so this project keeps zero runtime dependencies beyond Express.
 const envPath = path.join(__dirname, '.env');
 if (fs.existsSync(envPath)) {
-  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const trimmed = line.trim();
+  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  for (let lineNumber = 0; lineNumber < lines.length; lineNumber += 1) {
+    const trimmed = lines[lineNumber].trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
     const index = trimmed.indexOf('=');
     if (index < 1) continue;
     const key = trimmed.slice(0, index).trim();
     let value = trimmed.slice(index + 1).trim();
+    if (key === 'BUFFER_CONNECTIONS_JSON' && value.startsWith('[')) {
+      let depth = (value.match(/\[/g) || []).length - (value.match(/\]/g) || []).length;
+      while (depth > 0 && lineNumber + 1 < lines.length) {
+        lineNumber += 1;
+        value += `\n${lines[lineNumber].trim()}`;
+        depth += (lines[lineNumber].match(/\[/g) || []).length - (lines[lineNumber].match(/\]/g) || []).length;
+      }
+    }
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
     if (!(key in process.env)) process.env[key] = value;
   }
@@ -23,15 +32,36 @@ const { readConfig, qualityMap } = require('./src/ai-config.cjs');
 const { randomUUID } = require('node:crypto');
 const config = readConfig();
 const app = express();
-const mediaUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const mediaTempDir = path.join(__dirname, '.media-tmp');
+fs.mkdirSync(mediaTempDir, { recursive: true });
+const MAX_IMAGE_UPLOAD_BYTES = Number(process.env.MAX_IMAGE_UPLOAD_BYTES || 10 * 1024 * 1024);
+const MAX_VIDEO_UPLOAD_BYTES = Number(process.env.MAX_VIDEO_UPLOAD_BYTES || 500 * 1024 * 1024);
+const mediaUpload = multer({ storage: multer.diskStorage({ destination: mediaTempDir, filename: (_req, file, done) => done(null, `${Date.now()}-${randomUUID()}${path.extname(file.originalname || '')}`) }), limits: { fileSize: Math.max(MAX_IMAGE_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) } });
 const port = process.env.PORT || 3000;
 let aiBusy = false;
 const plans = new Map(); // Short-lived local plans; never persistent content storage.
 app.use(express.json({ limit: '32kb' }));
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: 'Upplai Design Studio', bufferConfigured: Boolean(process.env.BUFFER_API_KEY), cloudinaryConfigured: Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) }));
-app.post('/api/publishing/posts', async (req,res) => { const body=req.body||{}; const validMode=['shareNow','customScheduled'].includes(body.mode); if(!process.env.BUFFER_API_KEY)return failure(res,503,'NOT_CONFIGURED','Buffer is not configured on this server.'); if(!validMode||!Array.isArray(body.channelIds)||!body.channelIds.length||typeof body.text!=='string'||!body.text.trim())return failure(res,400,'INVALID_INPUT','Add content and select at least one channel.'); if(body.mode==='customScheduled'&&(!body.dueAt||Number.isNaN(Date.parse(body.dueAt))||Date.parse(body.dueAt)<=Date.now()))return failure(res,400,'INVALID_SCHEDULE','Choose a future schedule time.'); try { const { publishPosts }=await import('./src/buffer-publish.mjs'); const results=await publishPosts({apiKey:process.env.BUFFER_API_KEY,text:body.text.trim(),channelIds:body.channelIds,mode:body.mode,dueAt:body.mode==='customScheduled'?body.dueAt:undefined,media:body.media});res.json({published:results.some(x=>x.success),results}); } catch { failure(res,502,'BUFFER_FAILED','Buffer publishing failed.'); }});app.get('/api/buffer/posts', async (req, res) => { const status = req.query.status; if (!['scheduled','sent'].includes(status)) return failure(res,400,'INVALID_INPUT','Choose scheduled or sent posts.'); try { const { getBufferOrganizations } = await import('./src/buffer.mjs'); const { listBufferPosts } = await import('./src/buffer-posts.mjs'); const organizations = await getBufferOrganizations({ apiKey: process.env.BUFFER_API_KEY }); const posts = await listBufferPosts({ apiKey: process.env.BUFFER_API_KEY, status, organizationIds: organizations.map(item => item.id) }); res.json({ posts }); } catch (error) { failure(res,error?.code === 'NOT_CONFIGURED' ? 503 : error?.code === 'AUTH' ? 401 : 502,error?.code || 'BUFFER_FAILED',error?.message || 'Buffer posts are unavailable.'); } });
-app.post('/api/buffer/posts/:id/reschedule', async (req,res) => { const dueAt=req.body?.dueAt; if(!dueAt || Number.isNaN(Date.parse(dueAt)) || Date.parse(dueAt)<=Date.now()) return failure(res,400,'INVALID_SCHEDULE','Choose a future schedule time.'); try { const { getBufferOrganizations }=await import('./src/buffer.mjs'); const { listBufferPosts, rescheduleBufferPost }=await import('./src/buffer-posts.mjs'); const organizations=await getBufferOrganizations({apiKey:process.env.BUFFER_API_KEY}); const scheduled=await listBufferPosts({apiKey:process.env.BUFFER_API_KEY,status:'scheduled',organizationIds:organizations.map(item=>item.id)}); if(!scheduled.some(post=>post.id===req.params.id)) return failure(res,404,'NOT_FOUND','This scheduled post is no longer available.'); await rescheduleBufferPost({apiKey:process.env.BUFFER_API_KEY,id:req.params.id,dueAt}); res.json({updated:true}); } catch(error) { failure(res,error?.code==='NOT_CONFIGURED'?503:error?.code==='AUTH'?401:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer could not reschedule this post.'); } });
-app.delete('/api/buffer/posts/:id', async (req,res) => { try { const { getBufferOrganizations }=await import('./src/buffer.mjs'); const { listBufferPosts, deleteBufferPost }=await import('./src/buffer-posts.mjs'); const organizations=await getBufferOrganizations({apiKey:process.env.BUFFER_API_KEY}); const scheduled=await listBufferPosts({apiKey:process.env.BUFFER_API_KEY,status:'scheduled',organizationIds:organizations.map(item=>item.id)}); if(!scheduled.some(post=>post.id===req.params.id)) return failure(res,404,'NOT_FOUND','This scheduled post is no longer available.'); await deleteBufferPost({apiKey:process.env.BUFFER_API_KEY,id:req.params.id}); res.json({deleted:true}); } catch(error) { failure(res,error?.code==='NOT_CONFIGURED'?503:error?.code==='AUTH'?401:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer could not cancel this post.'); } });app.get('/api/buffer/channels', async (_req, res) => { try { const { getBufferChannels, BufferError } = await import('./src/buffer.mjs'); const channels = await getBufferChannels({ apiKey: process.env.BUFFER_API_KEY }); res.json({ connected: true, channels }); } catch (error) { const status = error?.code === 'NOT_CONFIGURED' ? 503 : error?.code === 'AUTH' ? 401 : 502; failure(res, status, error?.code || 'BUFFER_FAILED', error?.message || 'Buffer connection failed.'); } });
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: 'Upplai Design Studio', bufferConfigured: Boolean(process.env.BUFFER_API_KEY || process.env.BUFFER_CONNECTIONS_JSON), cloudinaryConfigured: Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET), mediaLimits: { imageBytes: MAX_IMAGE_UPLOAD_BYTES, videoBytes: MAX_VIDEO_UPLOAD_BYTES } }));
+function safeDestinations(body) {
+  const legacy = Array.isArray(body.channelIds) ? body.channelIds.map(channelId => ({ connectionId: 'legacy', channelId })) : [];
+  const values = Array.isArray(body.destinations) ? body.destinations : legacy;
+  return values.filter(item => item && typeof item.connectionId === 'string' && item.connectionId.length <= 80 && typeof item.channelId === 'string' && item.channelId.length <= 160);
+}
+function safeTikTokTitle(value) { return typeof value === 'string' ? value.slice(0, 1000) : ''; }
+function safeChannelTexts(value) { return value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([id,text]) => typeof id === 'string' && id.length < 250 && typeof text === 'string' && text.trim() && text.length <= 8000).map(([id,text]) => [id,text.trim()])) : {}; }
+async function connections() { const { getBufferConnections } = await import('./src/buffer-connections.mjs'); return getBufferConnections(); }
+app.post('/api/publishing/posts', async (req,res) => {
+  const body=req.body||{}; const validMode=['shareNow','customScheduled'].includes(body.mode); const destinations=safeDestinations(body); const channelTexts=safeChannelTexts(body.channelTexts); const tiktokTitle=safeTikTokTitle(body.tiktokTitle); const safeUrl=value=>typeof value==='string'&&value.length<=2000&&/^https:\/\//i.test(value); const singleMedia=!body.media||safeUrl(body.media?.url); const carouselMedia=body.media?.type==='carousel'&&Array.isArray(body.media.items)&&body.media.items.length>=2&&body.media.items.length<=10&&body.media.items.every(item=>safeUrl(item?.url)&&item.resourceType==='image');
+  if(!validMode||!destinations.length||typeof body.text!=='string'||!body.text.trim()) return failure(res,400,'INVALID_INPUT','Add content and select at least one channel.');
+  if(body.media&&!(singleMedia||carouselMedia)) return failure(res,400,'INVALID_MEDIA','Choose valid public media before publishing.');
+  if(body.mode==='customScheduled'&&(!body.dueAt||Number.isNaN(Date.parse(body.dueAt))||Date.parse(body.dueAt)<=Date.now())) return failure(res,400,'INVALID_SCHEDULE','Choose a future schedule time.');
+  try { const { publishAcrossConnections }=await import('./src/buffer-connections.mjs'); const results=await publishAcrossConnections({connections:await connections(),destinations,text:body.text.trim(),channelTexts,tiktokTitle,mode:body.mode,dueAt:body.mode==='customScheduled'?body.dueAt:undefined,media:body.media}); res.json({published:results.some(x=>x.success),results}); }
+  catch(error) { failure(res,error?.code==='NOT_CONFIGURED'||error?.code==='CONFIGURATION'?503:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer publishing failed.'); }
+});
+app.get('/api/buffer/posts', async (req, res) => { const status=req.query.status; if(!['scheduled','sent'].includes(status)) return failure(res,400,'INVALID_INPUT','Choose scheduled or sent posts.'); try { const { aggregateBufferPosts }=await import('./src/buffer-connections.mjs'); const result=await aggregateBufferPosts({connections:await connections(),status}); res.json(result); } catch(error) { failure(res,error?.code==='NOT_CONFIGURED'||error?.code==='CONFIGURATION'?503:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer posts are unavailable.'); } });
+app.post('/api/buffer/posts/:id/reschedule', async (req,res) => { const dueAt=req.body?.dueAt; const connectionId=req.body?.connectionId; if(!dueAt||Number.isNaN(Date.parse(dueAt))||Date.parse(dueAt)<=Date.now()) return failure(res,400,'INVALID_SCHEDULE','Choose a future schedule time.'); try { const { findBufferConnection }=await import('./src/buffer-connections.mjs'); const { rescheduleBufferPost }=await import('./src/buffer-posts.mjs'); const connection=findBufferConnection(await connections(),connectionId||'legacy'); await rescheduleBufferPost({apiKey:connection.apiKey,id:req.params.id,dueAt}); res.json({updated:true}); } catch(error) { failure(res,error?.code==='NOT_FOUND'?404:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer could not reschedule this post.'); } });
+app.delete('/api/buffer/posts/:id', async (req,res) => { const connectionId=req.query.connectionId||req.body?.connectionId; try { const { findBufferConnection }=await import('./src/buffer-connections.mjs'); const { deleteBufferPost }=await import('./src/buffer-posts.mjs'); const connection=findBufferConnection(await connections(),connectionId||'legacy'); await deleteBufferPost({apiKey:connection.apiKey,id:req.params.id}); res.json({deleted:true}); } catch(error) { failure(res,error?.code==='NOT_FOUND'?404:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer could not cancel this post.'); } });
+app.get('/api/buffer/channels', async (_req,res) => { try { const { aggregateBufferChannels }=await import('./src/buffer-connections.mjs'); const result=await aggregateBufferChannels({connections:await connections()}); res.json({connected:result.channels.length>0,...result}); } catch(error) { failure(res,error?.code==='NOT_CONFIGURED'||error?.code==='CONFIGURATION'?503:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer connection failed.'); } });
 function mediaFailure(error, file) {
   const status = Number(error?.http_code || error?.status || error?.response?.status || 0);
   const headers = error?.response?.headers || error?.headers || {};
@@ -48,9 +78,13 @@ function mediaFailure(error, file) {
 }), async (req, res) => {
   const file = req.file;
   if (!file) return res.status(400).json({ uploaded:false, error:{ code:'NO_FILE', message:'Choose one media file to upload.' } });
-  if (!['image/png','image/jpeg','image/webp','video/mp4'].includes(file.mimetype)) return res.status(415).json({ uploaded:false, error:{ code:'UNSUPPORTED_TYPE', message:'Use PNG, JPG, WebP, or MP4 media.' } });
-  try { const { uploadMedia } = await import('./src/cloudinary.mjs'); const media = await uploadMedia(file.buffer, file.mimetype); res.json({ uploaded:true, media }); }
-  catch (error) { const safe = mediaFailure(error, file); res.status(safe.status).json({ uploaded:false, error:{ code:safe.code, message:safe.message } }); }
+  const supported = ['image/png','image/jpeg','image/webp','video/mp4','video/quicktime','video/webm'];
+  if (!supported.includes(file.mimetype)) { fs.unlink(file.path, () => {}); return res.status(415).json({ uploaded:false, error:{ code:'UNSUPPORTED_TYPE', message:'Use PNG, JPG, WebP, MP4, MOV, or WebM media.' } }); }
+  const limit = file.mimetype.startsWith('video/') ? MAX_VIDEO_UPLOAD_BYTES : MAX_IMAGE_UPLOAD_BYTES;
+  if (file.size > limit) { fs.unlink(file.path, () => {}); return res.status(413).json({ uploaded:false, error:{ code:'FILE_TOO_LARGE', message:'This media file exceeds the configured upload limit.' } }); }
+  try { const { uploadMedia } = await import('./src/cloudinary.mjs'); const media = await uploadMedia(file.path, file.mimetype); res.json({ uploaded:true, media }); }
+  catch (error) { const safe = mediaFailure(error, file); res.status(safe.status).json({ uploaded:false, error:{ code: safe.code, message: safe.message } }); }
+  finally { fs.unlink(file.path, () => {}); }
 });app.get('/api/ai/status', (_req, res) => res.json({ configured: Boolean(config.apiKey), mockMode: config.mockMode,
   designModel: config.designModel, imageModel: config.imageModel,
   defaultQuality: Object.keys(qualityMap).find(k => qualityMap[k] === config.quality) || 'draft', error: config.error }));
@@ -81,6 +115,47 @@ function reportError(res, error) {
       : 'Generation failed or returned invalid data. Check the local server console for details.'
   );
 }
+function validAssistantBody(value) {
+  if (!value || typeof value !== 'object') return false;
+  const textFields = [value.sourceCaption, value.instruction, value.context?.headline, value.context?.supportingCopy, value.context?.cta];
+  return textFields.every(field => field === undefined || (typeof field === 'string' && field.length <= 4000));
+}
+async function assistantRoute(req, res, type) {
+  if (!checkRequest(req, res) || !validAssistantBody(req.body)) return;
+  aiBusy = true;
+  try {
+    const { generateCaptionOptions, generateAltText } = await import('./src/content-assistant.mjs');
+    const result = type === 'caption' ? await generateCaptionOptions({ config, input: req.body }) : await generateAltText({ config, input: req.body });
+    res.json({ ...result, mockMode: config.mockMode });
+  } catch (error) { reportError(res, error); }
+  finally { aiBusy = false; }
+}
+app.post('/api/ai/generate-caption', (req, res) => assistantRoute(req, res, 'caption'));
+app.post('/api/ai/generate-alt-text', (req, res) => assistantRoute(req, res, 'alt'));
+app.post('/api/ai/generate-carousel-content', async (req, res) => {
+  if (!checkRequest(req, res)) return;
+  aiBusy = true;
+  try {
+    const { generateCarouselContent, normalizeCarouselContentInput } = await import('./src/carousel-content.mjs');
+    const input = normalizeCarouselContentInput(req.body);
+    if (!input.topic) return failure(res, 400, 'INVALID_INPUT', 'Add a carousel prompt, topic, or source text.');
+    const carousel = await generateCarouselContent({ config, input });
+    res.json({ carousel, mockMode: config.mockMode });
+  } catch (error) { reportError(res, error); }
+  finally { aiBusy = false; }
+});
+app.post('/api/ai/generate-multi-page-content', async (req, res) => {
+  if (!checkRequest(req, res)) return;
+  aiBusy = true;
+  try {
+    const { generateMultiPageContent, normalizeMultiPageContentInput } = await import('./src/multi-page-content.mjs');
+    const input = normalizeMultiPageContentInput(req.body);
+    if (!input.prompt) return failure(res, 400, 'INVALID_INPUT', 'Add a multi-page prompt or creative direction first.');
+    const multiPage = await generateMultiPageContent({ config, input });
+    res.json({ multiPage, mockMode: config.mockMode });
+  } catch (error) { reportError(res, error); }
+  finally { aiBusy = false; }
+});
 app.post('/api/ai/design-plan', async (req, res) => {
   if (!checkRequest(req, res)) return;
   aiBusy = true;
@@ -97,13 +172,14 @@ app.post('/api/ai/design-plan', async (req, res) => {
     if (input.brandContext !== undefined && !brandContext) return failure(res, 400, 'INVALID_INPUT', 'Invalid brand context.');
     const { createDesignPlan } = await import('./src/ai-design-director.mjs');
     const sanitized = Object.fromEntries(['headline','supportingCopy','cta','customDirection','visualStyle','composition'].map(k => [k,input[k]]));
+    sanitized.renderMode = input.renderMode === 'full-ai-artwork' ? 'full-ai-artwork' : 'visual-native-text';
     sanitized.subjectType = subjectType;
     if (brandContext) sanitized.brandContext = brandContext;
     const plan = await createDesignPlan({ config, input: sanitized });
     for (const [id, entry] of plans) if (entry.expires < Date.now()) plans.delete(id);
     if (plans.size >= 50) plans.delete(plans.keys().next().value);
     const planId = randomUUID();
-    plans.set(planId, { plan, expires: Date.now() + 24 * 60 * 60 * 1000 });
+    plans.set(planId, { plan, renderMode: sanitized.renderMode, headline: sanitized.headline, supportingCopy: sanitized.supportingCopy, cta: sanitized.cta, expires: Date.now() + 24 * 60 * 60 * 1000 });
     res.json({ plan, planId, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
@@ -117,7 +193,7 @@ app.post('/api/ai/generate-visual', async (req, res) => {
   aiBusy = true;
   try {
     const { generateVisual } = await import('./src/openai-image.mjs');
-    const result = await generateVisual({ config, plan: entry.plan, quality });
+    const result = await generateVisual({ config, plan: entry.plan, quality, fullArtwork: entry.renderMode === 'full-ai-artwork', copy: entry });
     res.json({ ...result, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
@@ -134,5 +210,3 @@ if (require.main === module) app.listen(port, '0.0.0.0', () => {
   console.log(config.mockMode ? 'Mock Mode — No API Usage' : 'OpenAI live mode: requests only after an explicit generation action.');
 });
 module.exports = app;
-
-
