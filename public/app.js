@@ -1,4 +1,4 @@
-import { aiDefaults, setupAIControls, aiRequest, directorInput, prepareAIImage, applyAIStyle } from '/src/ai-style.js';
+import { aiDefaults, setupAIControls, aiRequest, aiImageRequest, dataUrlToFile, directorInput, prepareAIImage, applyAIStyle } from '/src/ai-style.js';
 import { validatePlan } from '/src/ai-plan.mjs';
 import { typography, typographyDefaults, typographyLabels, advancedFields, overrideField, migrateTypography, applyTypography, clearTypography } from '/src/typography.js';
 import { freeCompositions, selectComposition, nextComposition, applyFreeStyle } from '/src/free-style.js';
@@ -28,9 +28,17 @@ const generate = form.querySelector('button[type=submit]');
 const another = document.querySelector('#try-another');
 let shownComposition = null;
 let aiDesign = null;
+let aiVersions = [];
+let aiCurrentVersionId = null;
 let aiBusy = false;
 let aiConfiguration = null;
 const regenerate = document.querySelector('#regenerate-visual');
+const aiIteration = document.querySelector('#ai-iteration');
+const aiRefinementInstruction = document.querySelector('#ai-refinement-instruction');
+const aiRefineCurrent = document.querySelector('#ai-refine-current');
+const aiTryAnotherVersion = document.querySelector('#ai-try-another-version');
+const aiGenerationHistory = document.querySelector('#ai-generation-history');
+const aiGenerationInfo = document.querySelector('#ai-generation-info-content');
 const editDesign = document.querySelector('#edit-design');
 const saveCalendarDesign = document.querySelector('#save-calendar-design');
 const saveCarouselSlide = document.querySelector('#save-carousel-slide');
@@ -93,6 +101,7 @@ let backgroundImageLoading = Promise.resolve(null);
 let imageRequest = 0;
 let localEditor = null;
 let calendarEditorRowId = null;
+let calendarEditorPreviousState = null;
 let carouselEditorContext = null;
 let editorZoom = .46;
 let editorZoomMode = 'fit';
@@ -313,6 +322,35 @@ for (const [key, fallback] of Object.entries(defaults)) {
 // STATE
 // ==========================================================
 
+function applyFormValues(values = {}) {
+  Object.entries(values).forEach(([key, value]) => {
+    const control = form.elements[key];
+    if (control && typeof value !== 'object') control.value = String(value ?? '');
+  });
+  updateControls();
+}
+
+function populateCalendarForm(row = {}) {
+  const saved = row.designConfig && typeof row.designConfig === 'object'
+    ? row.designConfig
+    : {};
+  const values = {
+    ...defaults,
+    ...saved,
+    headline: row.headline ?? saved.headline ?? '',
+    supportingCopy: row.supportingCopy ?? saved.supportingCopy ?? '',
+    cta: row.cta ?? saved.cta ?? '',
+    style: row.style || saved.style || defaults.style,
+    logo: saved.logo || row.logo || defaults.logo,
+    placement: saved.placement || row.placement || defaults.placement,
+    aiVisualStyle: saved.aiVisualStyle || row.ai?.visualStyle || defaults.aiVisualStyle,
+    aiSubject: saved.aiSubject || row.ai?.subjectType || defaults.aiSubject,
+    aiComposition: saved.aiComposition || row.ai?.composition || defaults.aiComposition,
+    aiDirection: saved.aiDirection ?? row.ai?.direction ?? defaults.aiDirection,
+    aiQuality: saved.aiQuality || row.ai?.quality || defaults.aiQuality
+  };
+  applyFormValues(values);
+}
 function state() {
   return normalizeDesignInput(Object.fromEntries(
     Object.keys(defaults).map(key => [
@@ -357,7 +395,11 @@ function updateControls() {
   generate.textContent = ai ? 'Generate AI Design' : 'Generate Preview';
   generate.disabled = aiBusy || ai && (!aiConfiguration || !!aiConfiguration.error || !aiConfiguration.mockMode && !aiConfiguration.configured);
   regenerate.hidden = !ai || !aiDesign;
-  regenerate.disabled = aiBusy;
+regenerate.disabled = aiBusy;
+  aiIteration.hidden = !ai || !aiDesign;
+  aiRefineCurrent.disabled = aiBusy;
+  aiTryAnotherVersion.disabled = aiBusy;
+  aiGenerationInfo.textContent = aiConfiguration ? `${aiConfiguration.imageEngine || 'OpenAI Images API'} · ${aiConfiguration.imageModel || 'Unknown model'} · ${aiConfiguration.defaultQuality || 'draft'} quality` : 'Generation configuration is loading.';
   const free = form.elements.style.value === 'free-style';
   document.querySelector('#free-controls').hidden = !free;
   document.querySelector('#background-controls').hidden = minimalControls.hidden && !free;
@@ -427,6 +469,12 @@ form.addEventListener('input', event => {
   updateControls();
 
   if (event.target.name === 'backgroundImage') {
+    return;
+  }
+
+  if (calendarEditorRowId) {
+    status.textContent = 'Calendar content updated. Generate Preview to reformat this design.';
+    if (form.elements.style.value === 'openai-style' && aiDesign) renderPreview();
     return;
   }
 
@@ -521,11 +569,12 @@ async function renderDesign(value) {
       item => item.id === value.style
     );
 
+  const preserveCalendarContext = Boolean(calendarEditorRowId && !carouselEditorContext);
   currentStyle = null;
   closeLocalEditor();
-  calendarEditorRowId = null;
+  if (!preserveCalendarContext) calendarEditorRowId = null;
   carouselEditorContext = null;
-  saveCalendarDesign.hidden = true;
+  saveCalendarDesign.hidden = !preserveCalendarContext;
   saveCarouselSlide.hidden = true;
   carouselEditorActions.hidden = true;
 
@@ -666,6 +715,8 @@ async function renderDesign(value) {
         ? style.id
         : null;
 
+    if (preserveCalendarContext) saveCalendarDesign.hidden = !fits;
+
     const stored = value.calendarRun || saveState(value);
 
     status.textContent =
@@ -721,7 +772,20 @@ function renderPreview() {
 // DOWNLOAD
 // ==========================================================
 
-editDesign.addEventListener('click', () => { if (!currentStyle) return; openSharedEditor({ source: 'create', contentType: 'single-image', designMode: form.elements.style.value === 'openai-style' ? form.elements.aiRenderMode.value : 'native', renderedPreview: preview, style: currentStyle, returnDestination: 'create' }); });
+editDesign.addEventListener('click', () => {
+  if (!currentStyle) return;
+  const fromCalendar = Boolean(calendarEditorRowId);
+  openSharedEditor({
+    source: fromCalendar ? 'calendar-single' : 'create',
+    contentType: 'single-image',
+    designMode: form.elements.style.value === 'openai-style' ? form.elements.aiRenderMode.value : 'native',
+    itemId: fromCalendar ? calendarEditorRowId : null,
+    resultRef: fromCalendar ? preview.dataset.resultRef || '' : '',
+    renderedPreview: preview,
+    style: currentStyle,
+    returnDestination: fromCalendar ? 'review' : 'create'
+  });
+});
 
 resetDesignEdits.addEventListener('click', () => {
   if (!localEditor) return;
@@ -746,6 +810,7 @@ saveCalendarDesign.addEventListener('click', async () => {
 
   try {
     const resultRef = row.resultRef || calendarResultRef(row.id);
+    const designConfig = { ...state(), style: currentStyle };
     const result = {
       preview: cleanEditedPreview(preview),
       style: currentStyle
@@ -755,7 +820,24 @@ saveCalendarDesign.addEventListener('click', async () => {
 
     const nextRows = calendar.rows.map(item =>
       item.id === row.id
-        ? { ...item, resultRef }
+        ? {
+          ...item,
+          headline: designConfig.headline,
+          supportingCopy: designConfig.supportingCopy,
+          cta: designConfig.cta,
+          style: designConfig.style,
+          logo: designConfig.logo,
+          placement: designConfig.placement,
+          ai: {
+            visualStyle: designConfig.aiVisualStyle,
+            subjectType: designConfig.aiSubject,
+            composition: designConfig.aiComposition,
+            direction: designConfig.aiDirection,
+            quality: designConfig.aiQuality
+          },
+          designConfig,
+          resultRef
+        }
         : item
     );
 
@@ -773,6 +855,7 @@ saveCalendarDesign.addEventListener('click', async () => {
     }));
 
     closeLocalEditor();
+    calendarEditorPreviousState = null;
     calendarEditorRowId = null;
     saveCalendarDesign.hidden = true;
     status.textContent = 'Edited design saved to Calendar.';
@@ -904,11 +987,20 @@ download.addEventListener('click', async () => {
   }
 });
 
+document.addEventListener('workspace:changed', event => {
+  if (event.detail?.workspace !== 'create' || !calendarEditorRowId) return;
+  applyFormValues(calendarEditorPreviousState || defaults);
+  calendarEditorPreviousState = null;
+  calendarEditorRowId = null;
+  saveCalendarDesign.hidden = true;
+});
 document.addEventListener('calendar:design-edit', event => {
-  const { id, resultRef = '', preview: source, style, designMode = 'native' } = event.detail || {};
+  const { id, resultRef = '', preview: source, style, designMode = 'native', row = null } = event.detail || {};
   if (!id || !source?.cloneNode) return;
+  if (!calendarEditorRowId) calendarEditorPreviousState = state();
   closeLocalEditor();
-  openSharedEditor({ source: 'calendar-single', contentType: 'single-image', designMode, itemId: id, resultRef, renderedPreview: source, style, returnDestination: 'review' });
+  populateCalendarForm(row || { style });
+  openSharedEditor({ source: 'calendar-single', contentType: 'single-image', designMode, itemId: id, resultRef, renderedPreview: source, style: row?.style || style, returnDestination: 'review' });
   document.querySelector('#preview-style').textContent = designStyles.find(item => item.id === currentStyle)?.name || 'Calendar design';
   status.textContent = 'Editing Calendar design locally. Save to Calendar when you are ready.';
 });
@@ -1019,6 +1111,59 @@ another.addEventListener('click', () => {
   form.elements.freeVariation.dispatchEvent(new Event('input', { bubbles: true }));
   form.requestSubmit();
 });
+function updateAIVersionHistory() {
+  aiGenerationHistory.replaceChildren();
+  aiVersions.forEach(version => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = `V${version.number} ${version.kind}${version.id === aiCurrentVersionId ? ' · Current' : ''}`;
+    button.title = version.instruction || version.kind;
+    button.addEventListener('click', () => restoreAIVersion(version.id));
+    aiGenerationHistory.append(button);
+  });
+}
+
+function recordAIVersion(design, { kind, instruction = '' }) {
+  const version = { id: crypto.randomUUID(), number: aiVersions.length + 1, kind, instruction, createdAt: new Date().toISOString(), design };
+  aiVersions.push(version);
+  aiCurrentVersionId = version.id;
+  updateAIVersionHistory();
+}
+
+async function restoreAIVersion(id) {
+  const version = aiVersions.find(item => item.id === id);
+  if (!version || aiBusy) return;
+  aiDesign = version.design;
+  aiCurrentVersionId = version.id;
+  await renderPreview();
+  updateAIVersionHistory();
+  status.textContent = `Restored V${version.number}.`;
+}
+
+async function refineCurrentAI() {
+  if (aiBusy || !aiDesign || !aiRefinementInstruction.value.trim()) return;
+  const previous = aiDesign;
+  aiBusy = true;
+  updateControls();
+  showProcessing({ title: 'Refining your visual…', message: 'Applying your instruction to the current AI visual.' });
+  try {
+    const data = new FormData();
+    data.append('planId', aiDesign.planId);
+    data.append('quality', state().aiQuality);
+    data.append('instruction', aiRefinementInstruction.value.trim());
+    data.append('image', dataUrlToFile(aiDesign.image));
+    const result = await aiImageRequest('refine-visual', data);
+    const visual = await prepareAIImage(result);
+    aiDesign = { ...previous, mockMode: result.mockMode, ...visual };
+    recordAIVersion(aiDesign, { kind: 'Refined', instruction: aiRefinementInstruction.value.trim() });
+    await renderPreview();
+    aiRefinementInstruction.value = '';
+    status.textContent = 'Refined visual ready.';
+  } catch (error) {
+    aiDesign = previous;
+    status.textContent = error.message + ' The current version is unchanged.';
+  } finally { hideProcessing(); aiBusy = false; updateControls(); }
+}
 // Only these two explicit actions can enter the generation pipeline.
 async function generateAI(regenerateOnly = false) {
   if (aiBusy || !aiConfiguration || aiConfiguration.error || !aiConfiguration.mockMode && !aiConfiguration.configured) return;
@@ -1044,6 +1189,8 @@ async function generateAI(regenerateOnly = false) {
     status.textContent = 'Composing design…';
     const visual = await prepareAIImage(result);
     aiDesign = { plan: planned.plan, planId: planned.planId, mockMode: result.mockMode, ...visual };
+    if (!previous) aiVersions = [];
+    recordAIVersion(aiDesign, { kind: previous ? 'Alternative' : 'Original' });
     await renderPreview();
   } catch (error) {
     aiDesign = previous;
@@ -1083,6 +1230,8 @@ form.addEventListener('submit', event => {
   else renderPreview();
 });
 regenerate.addEventListener('click', () => generateAI(true));
+aiRefineCurrent.addEventListener('click', refineCurrentAI);
+aiTryAnotherVersion.addEventListener('click', () => generateAI(true));
 // Status is a read-only local request, never an OpenAI request.
 fetch('/api/ai/status', { signal: AbortSignal.timeout(5000) }).then(response => {
   if (!response.ok) throw new Error('Status unavailable');

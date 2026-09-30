@@ -6,7 +6,7 @@ test('shared editor handoff has one concrete Create entry point and retains expl
   const source = fs.readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
   assert.match(source, /function openSharedEditor\(options = \{\}\)/);
   assert.match(source, /preview\.dataset\.resultRef = resultRef/);
-  assert.match(source, /openSharedEditor\(\{ source: 'create'/);
+  assert.match(source, /source: fromCalendar \? 'calendar-single' : 'create'/);
   assert.match(source, /openSharedEditor\(\{ source: 'calendar-single'/);
 });
 

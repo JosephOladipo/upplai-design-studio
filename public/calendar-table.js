@@ -1129,6 +1129,8 @@ reviewEditDesign.addEventListener(
           {
             detail: {
               id: row.id,
+              resultRef: row.resultRef || '',
+              row,
               preview: result.preview,
               style: result.style || row.style
             }

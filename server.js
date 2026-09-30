@@ -36,6 +36,7 @@ const mediaTempDir = path.join(__dirname, '.media-tmp');
 fs.mkdirSync(mediaTempDir, { recursive: true });
 const MAX_IMAGE_UPLOAD_BYTES = Number(process.env.MAX_IMAGE_UPLOAD_BYTES || 10 * 1024 * 1024);
 const MAX_VIDEO_UPLOAD_BYTES = Number(process.env.MAX_VIDEO_UPLOAD_BYTES || 500 * 1024 * 1024);
+const aiImageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 const mediaUpload = multer({ storage: multer.diskStorage({ destination: mediaTempDir, filename: (_req, file, done) => done(null, `${Date.now()}-${randomUUID()}${path.extname(file.originalname || '')}`) }), limits: { fileSize: Math.max(MAX_IMAGE_UPLOAD_BYTES, MAX_VIDEO_UPLOAD_BYTES) } });
 const port = process.env.PORT || 3000;
 let aiBusy = false;
@@ -86,11 +87,11 @@ function mediaFailure(error, file) {
   catch (error) { const safe = mediaFailure(error, file); res.status(safe.status).json({ uploaded:false, error:{ code: safe.code, message: safe.message } }); }
   finally { fs.unlink(file.path, () => {}); }
 });app.get('/api/ai/status', (_req, res) => res.json({ configured: Boolean(config.apiKey), mockMode: config.mockMode,
-  designModel: config.designModel, imageModel: config.imageModel,
+  designModel: config.designModel, imageModel: config.imageModel, imageEngine: 'OpenAI Images API',
   defaultQuality: Object.keys(qualityMap).find(k => qualityMap[k] === config.quality) || 'draft', error: config.error }));
 function failure(res, status, code, message) { res.status(status).json({ error: { code, message } }); }
-function checkRequest(req, res) {
-  if (!req.is('application/json') || (req.headers.origin && req.headers.origin !== 'http://' + req.headers.host)) {
+function checkRequest(req, res, multipart = false) {
+  if (!(multipart ? req.is('multipart/form-data') : req.is('application/json')) || (req.headers.origin && req.headers.origin !== 'http://' + req.headers.host)) {
     failure(res, 403, 'REQUEST_BLOCKED', 'Use the local application to generate designs.'); return false;
   }
   if (config.error) { failure(res, 503, 'CONFIGURATION', config.error); return false; }
@@ -198,6 +199,26 @@ app.post('/api/ai/generate-visual', async (req, res) => {
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
 });
+app.post('/api/ai/refine-visual', (req, res, next) => aiImageUpload.single('image')(req, res, error => {
+  if (error) return failure(res, 400, 'INVALID_IMAGE', 'Choose a PNG, JPG, or WebP visual under 10 MB.');
+  next();
+}), async (req, res) => {
+  if (!checkRequest(req, res, true)) return;
+  const entry = plans.get(req.body?.planId);
+  const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim() : '';
+  const quality = req.body?.quality;
+  if (!entry || entry.expires < Date.now()) return failure(res, 400, 'PLAN_EXPIRED', 'Generate a new design plan first. The previous plan has expired.');
+  if (!instruction || instruction.length > 1200) return failure(res, 400, 'INVALID_INPUT', 'Add a refinement instruction of up to 1,200 characters.');
+  if (!Object.hasOwn(qualityMap, quality)) return failure(res, 400, 'INVALID_QUALITY', 'Choose Draft, Standard or Premium.');
+  if (!req.file || !['image/png','image/jpeg','image/webp'].includes(req.file.mimetype)) return failure(res, 400, 'INVALID_IMAGE', 'Choose a PNG, JPG, or WebP visual to refine.');
+  aiBusy = true;
+  try {
+    const { refineVisual } = await import('./src/openai-image.mjs');
+    const result = await refineVisual({ config, plan: entry.plan, quality, image: req.file, instruction, fullArtwork: entry.renderMode === 'full-ai-artwork' });
+    res.json({ ...result, mockMode: config.mockMode });
+  } catch (error) { reportError(res, error); }
+  finally { aiBusy = false; }
+});app.use('/api', (_req, res) => failure(res, 404, 'API_NOT_FOUND', 'This API endpoint is unavailable. Restart the local app and try again.'));
 // Only browser modules are public; server-only modules stay private.
 app.use('/src', (req, res, next) => {
   if (!/^\/[a-z-]+\.js$/.test(req.path) && req.path !== '/ai-plan.mjs') return res.sendStatus(404);

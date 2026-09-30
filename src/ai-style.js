@@ -123,7 +123,11 @@ export function setupAIControls() {
   const promptLibrary = document.createElement('div');
   promptLibrary.id = 'ai-prompt-library';
   promptLibrary.innerHTML = `<label for="aiDesignPrompt">Design Prompt / Creative Direction</label><textarea id="aiDesignPrompt" name="aiDesignPrompt" rows="3" maxlength="1200" placeholder="Describe how you want the design to look..."></textarea><label for="aiSavedPrompt">Saved Prompts</label><div class="ai-prompt-actions"><select id="aiSavedPrompt"><option value="">Select saved prompt...</option></select><button id="aiSavePrompt" type="button">Save</button><button id="aiRenamePrompt" type="button">Rename</button><button id="aiDuplicatePrompt" type="button">Duplicate</button><button id="aiDeletePrompt" type="button">Delete</button></div>`;
-  panel.append(promptLibrary);
+  panel.append(promptLibrary);  const iteration = document.createElement('section');
+  iteration.id = 'ai-iteration';
+  iteration.hidden = true;
+  iteration.innerHTML = `<details id="ai-generation-info"><summary>Generation Info</summary><p id="ai-generation-info-content"></p></details><label for="ai-refinement-instruction">Refine this design</label><textarea id="ai-refinement-instruction" rows="3" maxlength="1200" placeholder="Describe the visual change you want..."></textarea><div class="ai-prompt-actions"><button id="ai-refine-current" type="button">Refine Current</button><button id="ai-try-another-version" type="button">Try Another Version</button></div><div id="ai-generation-history" aria-live="polite"></div>`;
+  panel.append(iteration);
   const prompt = promptLibrary.querySelector('#aiDesignPrompt'); const saved = promptLibrary.querySelector('#aiSavedPrompt');
   const refreshPrompts = () => { const selected = saved.value; saved.replaceChildren(new Option('Select saved prompt...', '')); loadSavedDesignPrompts().forEach(item => saved.add(new Option(item.name, item.id))); saved.value = selected; };
   refreshPrompts();
@@ -305,6 +309,29 @@ export async function aiRequest(path, body) {
 }
 
 
+export async function aiImageRequest(path, formData) {
+  let response;
+  try {
+    response = await fetch('/api/ai/' + path, { method: 'POST', body: formData, signal: AbortSignal.timeout(190000) });
+  } catch (error) {
+    throw new Error(error.name === 'TimeoutError' ? 'Generation timed out. No automatic retry was made.' : 'Could not reach the local design server.');
+  }
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    throw new Error('The local AI server returned an unexpected response. Restart the app and try again.');
+  }
+  if (!response.ok) throw new Error(result.error?.message || 'AI generation failed.');
+  return result;
+}
+
+export function dataUrlToFile(dataUrl, name = 'current-design.png') {
+  const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl || '');
+  if (!match) throw new Error('The current visual cannot be refined.');
+  const bytes = Uint8Array.from(atob(match[2]), char => char.charCodeAt(0));
+  return new File([bytes], name, { type: match[1] });
+}
 export function activeBrandContext() {
   return {
     brandName: brand.name,
