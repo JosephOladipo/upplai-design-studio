@@ -17,6 +17,8 @@ const HEADER_NAMES = {
   composition: 'composition',
   visualdirection: 'direction',
   quality: 'quality',
+  rendermode: 'renderMode',
+  designprompt: 'designPrompt',
   contentformat: 'contentFormat'
 };
 
@@ -208,7 +210,9 @@ function normalizeRow(raw, rowNumber, order, headers) {
       subjectType: subjectType.value,
       composition: composition.value,
       direction: appendDirection(appendDirection(getCell(raw, headers, 'direction'), composition.guidance), subjectType.guidance),
-      quality: quality.value
+      quality: quality.value,
+      renderMode: getCell(raw, headers, 'renderMode') === 'full-ai-artwork' ? 'full-ai-artwork' : 'visual-native-text',
+      designPrompt: display(getCell(raw, headers, 'designPrompt'))
     },
     status: 'ready',
     generatedAt: null,
@@ -342,7 +346,7 @@ export function createManualRow(input, rows = []) {
   const order = nextRowOrder(rows);
   const row = { id: `calendar-manual-${hash(`${Date.now()}|${order}|${headline}`)}`, order, date, headline,
     supportingCopy: display(input.supportingCopy), cta: display(input.cta), style, contentFormat, carousel: contentFormat === 'carousel' ? normalizeCarousel(input.carousel || createCarouselDraft()) : null, multiPage: contentFormat === 'multi-page' ? normalizeMultiPage(input.multiPage || createMultiPageDraft(input.pageCount || 2)) : null,
-    ai: { visualStyle: visualStyle.value, subjectType: subjectType.value, composition: composition.value, direction: display(input.direction), quality: quality.value },
+    ai: { visualStyle: visualStyle.value, subjectType: subjectType.value, composition: composition.value, direction: display(input.direction), quality: quality.value, renderMode: input.renderMode === 'full-ai-artwork' ? 'full-ai-artwork' : 'visual-native-text', designPrompt: display(input.designPrompt) },
     status: 'ready', generatedAt: null, error: null, resultRef: null };
   row.inputFingerprint = fingerprint(row);
   return { row };

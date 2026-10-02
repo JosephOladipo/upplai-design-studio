@@ -6,6 +6,7 @@ export function runtimeBrandFromKit(value) {
   const kit = validateBrandKit(value) ? value : defaultBrandKit;
   return {
     name: kit.brandName,
+    aiInstruction: kit.aiInstruction || '',
     colors: { primaryLight: kit.colors.primary, primary: kit.colors.secondary, primaryDeep: kit.colors.secondary, pink: kit.colors.accent, navy: kit.colors.dark, white: kit.colors.light, grey: '#A7B2C2' },
     logoUrl: kit.logos.primary || '/assets/upplai-logo.png',
     fontFamily: font(kit.fonts.body), headingFont: font(kit.fonts.heading), bodyFont: font(kit.fonts.body),

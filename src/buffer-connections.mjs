@@ -46,7 +46,7 @@ export async function aggregateBufferChannels({ connections = getBufferConnectio
   return { connections: statuses, channels, duplicates };
 }
 
-export async function publishAcrossConnections({ connections = getBufferConnections(), destinations = [], text, channelTexts = {}, tiktokTitle = '', mode, dueAt, media, fetcher, mediaVerifier } = {}) {
+export async function publishAcrossConnections({ connections = getBufferConnections(), destinations = [], text, channelTexts = {}, tiktokTitle = '', accessibility = {}, mode, dueAt, media, fetcher, mediaVerifier } = {}) {
   const map = new Map(connections.map(connection => [connection.id, connection]));
   const groups = new Map(); const results = [];
   for (const destination of destinations) {
@@ -58,7 +58,8 @@ export async function publishAcrossConnections({ connections = getBufferConnecti
     const connection = map.get(connectionId);
     const perConnectionText = Object.fromEntries(channelIds.map(channelId => [channelId, channelTexts[destinationKey(connectionId, channelId)] || channelTexts[channelId] || text]));
     try {
-      const groupResults = await publishPosts({ apiKey: connection.apiKey, text, channelTexts: perConnectionText, tiktokTitle, channelIds, mode, dueAt, media, fetcher, mediaVerifier });
+      const groupAccessibility = { ...accessibility, platformAltText: Object.fromEntries(channelIds.map(channelId => [channelId, accessibility.platformAltText?.[destinationKey(connectionId, channelId)] || accessibility.platformAltText?.[channelId] || ''])) };
+      const groupResults = await publishPosts({ apiKey: connection.apiKey, text, channelTexts: perConnectionText, tiktokTitle, accessibility: groupAccessibility, channelIds, mode, dueAt, media, fetcher, mediaVerifier });
       results.push(...groupResults.map(result => ({ ...result, connectionId, connectionName: connection.name })));
     } catch (error) { results.push(...channelIds.map(channelId => ({ connectionId, connectionName: connection.name, channelId, success: false, error: error?.message || 'Buffer connection failed.' }))); }
   }

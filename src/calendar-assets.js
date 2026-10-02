@@ -17,8 +17,10 @@ async function transact(mode, work) {
   const database = await openDatabase();
   try {
     return await new Promise((resolve, reject) => {
-      const request = work(database.transaction(STORE_NAME, mode).objectStore(STORE_NAME));
-      request.onsuccess = () => resolve(request.result);
+      const transaction = database.transaction(STORE_NAME, mode);
+      const request = work(transaction.objectStore(STORE_NAME));
+      transaction.oncomplete = () => resolve(request.result);
+      transaction.onabort = () => reject(transaction.error || new Error('Asset storage transaction aborted.'));
       request.onerror = () => reject(request.error || new Error('Review asset storage failed.'));
     });
   } finally { database.close(); }
@@ -69,4 +71,11 @@ export async function saveCarouselVisualAsset(id, dataUrl, metadata = {}) {
 export async function loadCarouselVisualAsset(id) {
   const asset = await loadCalendarAsset(id);
   return asset?.type === 'carousel-visual' ? asset : null;
+}
+
+// Blob persistence shares the existing asset database; localStorage stores only its key.
+export async function savePublishingMedia(file) {
+  const id = 'publishing-current-media';
+  await transact('readwrite', store => store.put({ id, type: 'publishing-media', file }));
+  return id;
 }

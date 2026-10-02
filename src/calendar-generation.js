@@ -2,6 +2,7 @@ import { calendarRowToDesignInput } from './design-controller.js';
 import { normalizeStatus, rowsInOrder } from './calendar.js';
 
 const eligible = new Set(['ready', 'stale']);
+export const calendarSingleImageInput = row => calendarRowToDesignInput(row);
 const replace = (rows, row) => rows.map(item => item.id === row.id ? row : item);
 const compactError = error => String(error?.message || error || 'Generation failed.').replace(/\s+/g, ' ').slice(0, 180);
 
@@ -32,7 +33,7 @@ export function createCalendarQueue(generate, now = () => new Date().toISOString
           let row = { ...current.find(item => item.id === selected.id), status: 'generating', error: null };
           current = replace(current, row); await onRows(current, row, summary);
           try {
-            results.set(row.id, await generate(['carousel', 'multi-page'].includes(row.contentFormat) ? row : calendarRowToDesignInput(row))); 
+            results.set(row.id, await generate(['carousel', 'multi-page'].includes(row.contentFormat) ? row : calendarSingleImageInput(row)));
             row = { ...row, status: 'generated', generatedAt: now(), error: null, resultRef: null };
             summary.generated++;
           } catch (error) {

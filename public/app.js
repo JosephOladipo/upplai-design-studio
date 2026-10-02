@@ -347,7 +347,9 @@ function populateCalendarForm(row = {}) {
     aiSubject: saved.aiSubject || row.ai?.subjectType || defaults.aiSubject,
     aiComposition: saved.aiComposition || row.ai?.composition || defaults.aiComposition,
     aiDirection: saved.aiDirection ?? row.ai?.direction ?? defaults.aiDirection,
-    aiQuality: saved.aiQuality || row.ai?.quality || defaults.aiQuality
+    aiQuality: saved.aiQuality || row.ai?.quality || defaults.aiQuality,
+    aiRenderMode: saved.aiRenderMode || row.ai?.renderMode || defaults.aiRenderMode,
+    aiDesignPrompt: saved.aiDesignPrompt ?? row.ai?.designPrompt ?? defaults.aiDesignPrompt
   };
   applyFormValues(values);
 }
@@ -1242,4 +1244,3 @@ fetch('/api/ai/status', { signal: AbortSignal.timeout(5000) }).then(response => 
   document.querySelector('#ai-status').textContent = value.error || (value.mockMode ? 'Mock Mode — No API Usage' : value.configured ? 'Live mode — Generate and Regenerate use API credits.' : 'OpenAI is not configured. Enable Mock Mode or configure the server.');
   updateControls();
 }).catch(() => { document.querySelector('#ai-status').textContent = 'AI status unavailable. Check the local server.'; });
-

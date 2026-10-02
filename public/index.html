@@ -914,7 +914,33 @@
         </details>
 
 
-        <div class="brand-kit-actions">
+               <!-- AI BRAND INSTRUCTION -->
+
+        <details open>
+          <summary>
+            AI Brand Instruction
+          </summary>
+
+          <div class="brand-kit-group">
+            <label for="brandAiInstruction">
+              Default instruction for AI-generated designs
+            </label>
+
+            <textarea
+              id="brandAiInstruction"
+              name="brandAiInstruction"
+              rows="8"
+              maxlength="2000"
+              placeholder="Describe how AI-generated designs should follow your brand identity."
+            ></textarea>
+
+            <p class="muted">
+              This instruction guides AI design generation and refinement. You can edit it for any brand.
+            </p>
+          </div>
+        </details>
+
+ <div class="brand-kit-actions">
 
           <button
             id="save-brand-kit"
@@ -1003,7 +1029,7 @@
         <label>Content Format <select id="manual-content-format" name="contentFormat"><option value="single-image">Single Image</option><option value="multi-page">Multi-Page</option><option value="carousel">Carousel</option></select></label><label>Design Method <select id="manual-style" name="style"></select></label>
         <div id="manual-ai-fields" hidden>
           <label>Visual Style <select id="manual-visual-style"></select></label><label>Visual Subject <select id="manual-subject"></select></label><label>Composition <select id="manual-composition"></select></label>
-          <label>Visual Direction <textarea id="manual-direction" placeholder="Premium modern workspace, no people, soft daylight, leave negative space on the left."></textarea></label><label>Quality <select id="manual-quality"><option value="draft">Draft</option><option value="standard">Standard</option><option value="premium">Premium</option></select></label>
+          <label>AI Design Mode <select id="manual-render-mode"><option value="visual-native-text">AI Visual + Native Text</option><option value="full-ai-artwork">Full AI Artwork (flattened)</option></select></label><label>Design Prompt <textarea id="manual-design-prompt" maxlength="1200"></textarea></label><label>Visual Direction <textarea id="manual-direction" placeholder="Premium modern workspace, no people, soft daylight, leave negative space on the left."></textarea></label><label>Quality <select id="manual-quality"><option value="draft">Draft</option><option value="standard">Standard</option><option value="premium">Premium</option></select></label>
         </div>
         <div class="calendar-form-actions"><button type="submit">Save Post</button><button id="cancel-calendar-post" type="button">Cancel</button></div>
       </form>

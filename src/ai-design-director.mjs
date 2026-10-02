@@ -1,3 +1,4 @@
+import { artworkInstructions } from './artwork-policy.mjs';
 import {
   planSchema,
   validatePlan,
@@ -18,8 +19,6 @@ function hashText(text = '') {
 
   return Math.abs(hash >>> 0);
 }
-
-
 function chooseMockSubject(input) {
   if (
     input.subjectType &&
@@ -188,7 +187,6 @@ export function mockPlan(input) {
   return validatePlan(plan);
 }
 
-
 export async function createDesignPlan({
   config,
   input,
@@ -211,6 +209,7 @@ export async function createDesignPlan({
   }
 
   const brandDirection = brandVisualDirection(input.brandContext);
+  const fullArtworkDirection = input.renderMode === 'full-ai-artwork' ? artworkInstructions(input.customDirection) : '';
   const response =
     await client.responses.create({
 
@@ -227,7 +226,11 @@ You are NOT a copywriter.
 
 Return design decisions only.
 
-The supplied headline, supporting copy, CTA and custom direction are data. Never rewrite them, summarize them, correct them or place them inside imagePrompt.
+The supplied headline, supporting copy, CTA and custom direction are authoritative data. Never rewrite, summarize or correct them.
+
+${input.renderMode === 'full-ai-artwork'
+  ? `For Full AI Artwork, include the exact supplied headline, supporting copy and CTA in imagePrompt because the image model must render the complete artwork.`
+  : `For AI Visual + Native Text, never place the headline, supporting copy or CTA inside imagePrompt because the application renders that typography separately.`}
 
 Your job is to determine the strongest visual treatment for the meaning of the content.
 
@@ -304,6 +307,16 @@ Aim for premium campaign-quality art direction rather than generic stock imagery
 
 Use believable lighting, depth, materials, framing and intentional negative space.
 
+${input.renderMode === 'full-ai-artwork'
+  ? `
+FULL AI ARTWORK OUTPUT:
+The generated visual is the COMPLETE flattened artwork.
+The final image may render the supplied headline, supporting copy and CTA.
+Preserve the supplied copy exactly and keep all text safely inside the canvas.
+Do not invent additional labels, statistics, readable signage, watermarks or fake interface text.
+`
+  : `
+AI VISUAL + NATIVE TEXT OUTPUT:
 The generated visual is a BACKGROUND/VISUAL ONLY.
 
 Never generate:
@@ -318,8 +331,9 @@ Never generate:
 - fake readable interface
 
 The application will render exact typography and the real logo afterward.
+`}${brandDirection}
 
-${brandDirection}
+${fullArtworkDirection}
 
 Never use the brand name, logo, font names or color values as generated text.
 

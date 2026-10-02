@@ -9,6 +9,8 @@ const columns = [
   'Composition',
   'Visual Direction',
   'Quality',
+  'Render Mode',
+  'Design Prompt',
   'Content Format'
 ];
 
@@ -33,7 +35,7 @@ const exampleRows = [
     'Small resume mistakes can prevent strong candidates from reaching the interview stage.',
     'Check Your Resume',
     'Bold Statement',
-    '', '', '', '', ''
+    '', '', '', '', '', '', ''
   ],
   [
     '2026-09-22',
@@ -45,7 +47,10 @@ const exampleRows = [
     'No Main Subject',
     'Left',
     'Premium modern interview environment, no people, soft daylight, clean professional atmosphere, leave negative space on the left for headline text.',
-    'Draft'
+    'Draft',
+    'full-ai-artwork',
+    'Use transparent intentional artwork on a pure white canvas.',
+    'single-image'
   ]
 ];
 
@@ -102,6 +107,8 @@ function openManualForm(row) {
   document.getElementById('manual-subject').value = row?.ai?.subjectType ?? 'auto';
   document.getElementById('manual-composition').value = row?.ai?.composition ?? 'auto';
   document.getElementById('manual-direction').value = row?.ai?.direction ?? '';
+  document.getElementById('manual-render-mode').value = row?.ai?.renderMode || 'visual-native-text';
+  document.getElementById('manual-design-prompt').value = row?.ai?.designPrompt || '';
   document.getElementById('manual-quality').value = row?.ai?.quality ?? 'draft';
   manualErrors.textContent = '';
   manualAi.hidden = manualStyle.value !== 'openai-style';
@@ -128,7 +135,7 @@ document.getElementById('cancel-calendar-post').addEventListener('click', () => 
 manualForm.addEventListener('submit', event => {
   event.preventDefault();
   const existing = loadCalendar()?.rows || [];
-  const input = { date: document.getElementById('manual-date').value, headline: document.getElementById('manual-headline').value, supportingCopy: document.getElementById('manual-copy').value, cta: document.getElementById('manual-cta').value, contentFormat: document.getElementById('manual-content-format').value, carousel: existing.find(item => item.id === editingId)?.carousel, style: manualStyle.value, visualStyle: document.getElementById('manual-visual-style').value, subjectType: document.getElementById('manual-subject').value, composition: document.getElementById('manual-composition').value, direction: document.getElementById('manual-direction').value, quality: document.getElementById('manual-quality').value };
+  const input = { date: document.getElementById('manual-date').value, headline: document.getElementById('manual-headline').value, supportingCopy: document.getElementById('manual-copy').value, cta: document.getElementById('manual-cta').value, contentFormat: document.getElementById('manual-content-format').value, carousel: existing.find(item => item.id === editingId)?.carousel, style: manualStyle.value, visualStyle: document.getElementById('manual-visual-style').value, subjectType: document.getElementById('manual-subject').value, composition: document.getElementById('manual-composition').value, direction: document.getElementById('manual-direction').value, quality: document.getElementById('manual-quality').value, renderMode: document.getElementById('manual-render-mode').value, designPrompt: document.getElementById('manual-design-prompt').value };
   const index = existing.findIndex(row => row.id === editingId);
   const result = index < 0 ? createManualRow(input, existing) : updateManualRow(existing[index], input);
   if (!result.row) { manualErrors.textContent = result.errors.join(' '); return; }
@@ -221,5 +228,3 @@ if (savedCalendar) showSavedCalendar(savedCalendar);
 else showEmptyCalendar();
 
 export { columns, exampleRows, escapeCell };
-
-

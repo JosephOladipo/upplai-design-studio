@@ -591,7 +591,7 @@ import { normalizeBrandContext, brandVisualDirection } from '../src/ai-brand.mjs
 import { activeBrandContext, directorInput } from '../src/ai-style.js';
 
 const brandContext = {
-  brandName: 'Northstar Studio',
+  brandName: 'Northstar Studio', aiInstruction: '',
   colors: { primary: '#112233', secondary: '#223344', accent: '#334455', dark: '#445566', light: '#EEDDCC' },
   fonts: { heading: 'Georgia', body: 'Arial' }
 };

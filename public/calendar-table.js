@@ -2,7 +2,7 @@ import {
   loadCalendar, saveCalendar, calendarSummary, localDateKey, normalizeStatus,
   rowsInOrder, selectAllRows, selectTodayRows, selectUngeneratedRows, getSelectedRowsInOrder
 } from '/src/calendar.js';
-import { createCalendarQueue, todayEligibleIds } from '/src/calendar-generation.js';
+import { createCalendarQueue, todayEligibleIds, calendarSingleImageInput } from '/src/calendar-generation.js';
 import { calendarResultRef, saveCalendarAsset, loadCalendarAsset, removeCalendarAsset } from '/src/calendar-assets.js';
 import { generateCalendarDesign } from '/app.js';
 import { generateCarouselDesign } from '/carousel.js';
@@ -885,7 +885,7 @@ async function regenerateReview() {
   showProcessing({ title: 'Generating your designs…', message: 'Creating the selected Calendar content.' });
   try {
     const result =
-      await generateCalendarDesign(generating);
+      await generateCalendarDesign(calendarSingleImageInput(generating));
 
     const resultRef =
       await persistResult(row, result);

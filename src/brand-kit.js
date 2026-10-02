@@ -19,8 +19,9 @@ export function validateLogoFile(file) {
 export const defaultBrandKit = {
   brandName: 'Upplai',
 
-  logos: {
-    primary: '/assets/upplai-logo.png',
+  aiInstruction: 'Create artwork using the Upplai brand identity. Prioritize Upplai blue tones (#50C4F8, #2BB7F7, #0AABF1) as the dominant brand colors. Maintain a clean, modern, premium AI and career-tech aesthetic with strong visual hierarchy, professional composition, generous spacing, and high readability. Supporting neutral colors such as white, black, dark navy, and subtle gray may be used where appropriate. Avoid unrelated dominant colors unless specifically requested. Keep every artwork visually recognizable as part of the same Upplai brand family.',
+
+  logos: {    primary: '/assets/upplai-logo.png',
     white: '',
     dark: '',
     icon: ''

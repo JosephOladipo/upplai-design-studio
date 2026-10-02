@@ -434,6 +434,27 @@ main,#section-publishing{width:calc(100vw - var(--sidebar-width));max-width:1500
 @media(max-width:900px){body{padding-left:0}header{position:static;width:auto;height:auto;padding:18px 20px;border-right:0;border-bottom:1px solid var(--ui-border)}header .wordmark span{display:inline;margin-left:6px}.studio-nav{position:static;width:auto;flex-direction:row;overflow:auto;padding:8px 16px;border-bottom:1px solid var(--ui-border)}.studio-nav::before,#nav-brand::before{display:none}#nav-brand{margin:0}.studio-nav-button{width:auto;white-space:nowrap}main,#section-publishing{width:auto;margin-left:0;margin-right:0;padding:24px 20px}.publishing-grid{grid-template-columns:1fr!important}.publishing-media{height:500px}.review-workspace{grid-template-columns:1fr!important}.review-preview-panel #calendar-review-preview{margin:auto}.review-list-panel{display:block}}
 @media(max-width:560px){main,#section-publishing{width:auto;margin-left:0;margin-right:0;padding:16px}.publishing-media{height:405px}.publishing-media #preview{transform:scale(.3)}.review-preview-panel #calendar-review-preview{width:324px!important;height:405px!important}.review-preview-panel #calendar-review-preview #preview{transform:scale(.3)!important}}
 
+/* Keep every established workspace usable from 320px upward. */
+@media (max-width: 560px) {
+  html, body { overflow-x: hidden; }
+  header, .studio-nav, main, #section-publishing { max-width: 100%; box-sizing: border-box; }
+  .studio-nav { scrollbar-width: thin; }
+  .studio-nav-button { min-height: 44px; }
+  input, select, textarea, button { max-width: 100%; box-sizing: border-box; }
+  button { min-height: 44px; }
+  .form-row, .calendar-form-actions, .calendar-library-controls, .publishing-reschedule { grid-template-columns: 1fr !important; }
+  .calendar-library-controls, .calendar-selection, .calendar-heading, .review-workspace-header { flex-wrap: wrap; }
+  .calendar-library-controls input, .calendar-library-controls select, .calendar-library-controls button { width: 100%; min-width: 0; }
+  .calendar-table-wrap { max-width: 100%; overscroll-behavior-inline: contain; }
+  #section-publishing .publishing-grid > section { padding: 14px !important; }
+  #section-publishing .publishing-media { height: min(125vw, 405px) !important; min-height: min(125vw, 405px) !important; }
+  #section-publishing .publishing-media #preview { transform: scale(calc((100vw - 32px) / 1080)) !important; }
+  .publishing-carousel-preview, .publishing-carousel-stage { max-width: 100%; }
+  .publishing-carousel-thumbs { overflow-x: auto; justify-content: flex-start; }
+  #local-design-editor { min-width: 0; }
+  .canvas-editor-toolbar, .editor-grid, .editor-properties { grid-template-columns: 1fr !important; }
+}
+
 /* Phase 12C: compact publishing workspace and clear sidebar hierarchy. */
 @media (min-width: 901px) {
   .studio-nav #nav-brand { order: 10; margin-top: 30px; }

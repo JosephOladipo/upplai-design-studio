@@ -335,6 +335,7 @@ export function dataUrlToFile(dataUrl, name = 'current-design.png') {
 export function activeBrandContext() {
   return {
     brandName: brand.name,
+    aiInstruction: brand.aiInstruction || '',
     colors: {
       primary: brand.colors.primaryLight,
       secondary: brand.colors.primary,
@@ -375,6 +376,45 @@ export function directorInput(value) {
       manualPrompt || (custom ? value.aiDirection : ''),
     renderMode: value.aiRenderMode === 'full-ai-artwork' ? 'full-ai-artwork' : 'visual-native-text'
   };
+}
+
+const backgroundLuminance = (red, green, blue) => .2126 * red + .7152 * green + .0722 * blue;
+
+// Only remove a low-chroma backdrop that is connected to the edge. This is not
+// a global gray replacement, so isolated gray type, anti-aliasing, objects and
+// local shadows remain part of the artwork.
+export function clearEdgeConnectedNeutralBackdrop(data, width, height) {
+  if (!data || !width || !height) return { clearedPixels: 0, opaquePixels: 0 };
+  const offset = index => index * 4;
+  const edgeLuminances = [];
+  const neutralEdge = index => {
+    const at = offset(index); const red = data[at]; const green = data[at + 1]; const blue = data[at + 2];
+    if (data[at + 3] > 0 && Math.max(red, green, blue) - Math.min(red, green, blue) <= 28) edgeLuminances.push(backgroundLuminance(red, green, blue));
+  };
+  for (let x = 0; x < width; x += 1) { neutralEdge(x); neutralEdge((height - 1) * width + x); }
+  for (let y = 1; y < height - 1; y += 1) { neutralEdge(y * width); neutralEdge(y * width + width - 1); }
+  if (!edgeLuminances.length) return { clearedPixels: 0, opaquePixels: 0 };
+  edgeLuminances.sort((left, right) => left - right);
+  const minimumLuminance = Math.max(128, edgeLuminances[Math.floor(edgeLuminances.length / 2)] - 52);
+  const total = width * height; const visited = new Uint8Array(total); const queue = new Int32Array(total);
+  let head = 0; let tail = 0;
+  const opaquePixels = Array.from({ length: total }, (_, index) => data[offset(index) + 3] > 0 ? 1 : 0).reduce((sum, value) => sum + value, 0);
+  const accepts = (index, parent = -1) => {
+    const at = offset(index); const red = data[at]; const green = data[at + 1]; const blue = data[at + 2];
+    if (!data[at + 3] || Math.max(red, green, blue) - Math.min(red, green, blue) > 28 || backgroundLuminance(red, green, blue) < minimumLuminance) return false;
+    if (parent < 0) return true;
+    const prior = offset(parent);
+    return Math.abs(red - data[prior]) <= 18 && Math.abs(green - data[prior + 1]) <= 18 && Math.abs(blue - data[prior + 2]) <= 18;
+  };
+  const add = (index, parent) => { if (!visited[index] && accepts(index, parent)) { visited[index] = 1; queue[tail++] = index; } };
+  for (let x = 0; x < width; x += 1) { add(x, -1); add((height - 1) * width + x, -1); }
+  for (let y = 1; y < height - 1; y += 1) { add(y * width, -1); add(y * width + width - 1, -1); }
+  while (head < tail) {
+    const current = queue[head++]; const x = current % width; const y = Math.floor(current / width);
+    if (x) add(current - 1, current); if (x + 1 < width) add(current + 1, current); if (y) add(current - width, current); if (y + 1 < height) add(current + width, current);
+  }
+  for (let index = 0; index < tail; index += 1) data[offset(queue[index]) + 3] = 0;
+  return { clearedPixels: tail, opaquePixels };
 }
 
 
@@ -426,15 +466,39 @@ export async function prepareAIImage(result) {
   canvas.height = 1350;
 
   const context =
-    canvas.getContext('2d');
+  canvas.getContext('2d');
 
-  if (!context) {
-    throw new Error(
-      'Image composition is unavailable in this browser.'
-    );
+if (!context) {
+  throw new Error(
+    'Image composition is unavailable in this browser.'
+  );
+}
+
+  let cleanup = { clearedPixels: 0, opaquePixels: 0 };
+  if (result.fullArtwork && result.backgroundPolicy === 'white') {
+    const source = document.createElement('canvas');
+    source.width = image.naturalWidth;
+    source.height = image.naturalHeight;
+    const sourceContext = source.getContext('2d', { willReadFrequently: true });
+    if (!sourceContext) throw new Error('Image background cleanup is unavailable in this browser.');
+    sourceContext.drawImage(image, 0, 0);
+    const sourcePixels = sourceContext.getImageData(0, 0, source.width, source.height);
+    cleanup = clearEdgeConnectedNeutralBackdrop(sourcePixels.data, source.width, source.height);
+    sourceContext.putImageData(sourcePixels, 0, 0);
+    image.src = source.toDataURL('image/png');
+    await image.decode();
   }
 
-  const scale = Math.max(
+// Composite verified transparent content onto a deterministic pure-white canvas.
+context.fillStyle = '#FFFFFF';
+context.fillRect(
+  0,
+  0,
+  canvas.width,
+  canvas.height
+);
+
+const scale = (result.fullArtwork ? Math.min : Math.max)(
     1080 / image.naturalWidth,
     1350 / image.naturalHeight
   );
@@ -457,7 +521,8 @@ export async function prepareAIImage(result) {
     image:
       canvas.toDataURL('image/png'),
 
-    canvas
+    canvas,
+    backgroundCleanup: cleanup
   };
 }
 
@@ -952,4 +1017,3 @@ export function applyAIStyle(
 
   return notice;
 }
-

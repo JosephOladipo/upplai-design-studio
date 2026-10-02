@@ -15,7 +15,7 @@ test('carousel publishing handoff persists serialized assets in order and always
   assert.doesNotMatch(assets, /store\.put\(result\.slides/);
 });
 
-test('workspace and lightweight publishing recovery exclude browser file binaries', async () => {
+test('workspace and publishing recovery retain only asset references, never browser file binaries', async () => {
   const navigation = await file('public/navigation.js');
   const publishing = await file('public/publishing.js');
   const carousel = await file('public/carousel.js');
@@ -23,6 +23,8 @@ test('workspace and lightweight publishing recovery exclude browser file binarie
   assert.match(navigation, /showSection\(restoredWorkspace, \{ history: false \}\)/);
   assert.match(publishing, /upplai-design-studio-publishing-draft/);
   assert.match(publishing, /generatedRef/);
-  assert.doesNotMatch(publishing.match(/function savePublishingDraft\(\)[\s\S]*?\n\}/)?.[0] || '', /state\.media/);
+  const draft = publishing.match(/function savePublishingDraft\(\)[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(draft, /mediaRef/);
+  assert.doesNotMatch(draft, /state\.media\b|mediaInput\.files|File\(/);
   assert.match(carousel, /upplai-design-studio-carousel-recovery/);
 });

@@ -36,6 +36,8 @@ export function calendarRowToDesignInput(row) {
     aiSubject: row.ai?.subjectType,
     aiComposition: row.ai?.composition,
     aiDirection: row.ai?.direction,
-    aiQuality: row.ai?.quality
+    aiQuality: row.ai?.quality,
+    aiRenderMode: row.ai?.renderMode || 'visual-native-text',
+    aiDesignPrompt: row.ai?.designPrompt || ''
   });
 }

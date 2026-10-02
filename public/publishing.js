@@ -1,4 +1,5 @@
-import { loadCalendarAsset } from '/src/calendar-assets.js';
+import { attachedMediaInput } from './publishing-vision.js';
+import { loadCalendarAsset, savePublishingMedia } from '/src/calendar-assets.js';
 import { previewPngBlob } from '/src/export.js';
 import { brand } from '/src/brand.js';
 import { showProcessing, hideProcessing } from '/src/processing.js';
@@ -11,6 +12,7 @@ const state = {
   generatedPreview: null,
   generatedFile: null,
   generatedPreviewUrl: null,
+  mediaRef: '',
   carouselSlides: [],
   carouselIndex: 0,
   mediaSource: 'none',
@@ -41,8 +43,8 @@ const altText = q('publishing-alt-text');
 const supportedManualMedia = new Set(['image/png','image/jpeg','image/webp','video/mp4','video/quicktime','video/webm']);
 const bytesLabel = bytes => `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`;
 const PUBLISHING_RECOVERY_KEY = 'upplai-design-studio-publishing-draft';
-function savePublishingDraft() { try { localStorage.setItem(PUBLISHING_RECOVERY_KEY, JSON.stringify({ caption: caption.value, instruction: q('publishing-ai-instruction').value, altText: altText.value, captionMode: state.captionMode, altTextMode: state.altTextMode, mode: modeSelect.value, date: q('publishing-date').value, time: q('publishing-time').value, channels: [...state.channels], tab: managementStatusName || 'composer', generatedRef: state.generatedRef || '' })); } catch { /* files and media are intentionally excluded */ } }
-function restorePublishingDraft() { try { const saved = JSON.parse(localStorage.getItem(PUBLISHING_RECOVERY_KEY)); if (!saved || typeof saved !== 'object') return; caption.value = String(saved.caption || ''); q('publishing-ai-instruction').value = String(saved.instruction || ''); altText.value = String(saved.altText || ''); state.captionMode = saved.captionMode === 'platform' ? 'platform' : 'generic'; state.altTextMode = saved.altTextMode === 'platform' ? 'platform' : 'generic'; modeSelect.value = saved.mode === 'schedule' ? 'schedule' : 'now'; q('publishing-date').value = String(saved.date || ''); q('publishing-time').value = String(saved.time || ''); (saved.channels || []).forEach(id => state.channels.add(id)); state.generatedRef = String(saved.generatedRef || '') || null; managementStatusName = ['scheduled','sent'].includes(saved.tab) ? saved.tab : 'composer'; } catch { /* invalid recovery data is ignored */ } }
+function savePublishingDraft() { try { localStorage.setItem(PUBLISHING_RECOVERY_KEY, JSON.stringify({ caption: caption.value, instruction: q('publishing-ai-instruction').value, altText: altText.value, captionMode: state.captionMode, altTextMode: state.altTextMode, mode: modeSelect.value, date: q('publishing-date').value, time: q('publishing-time').value, channels: [...state.channels], tab: managementStatusName || 'composer', generatedRef: state.generatedRef || '', mediaRef: state.mediaRef || '', mediaSource: state.mediaSource, existingMedia: state.existingMedia, contentContext: state.contentContext, platformCaptions: state.platformCaptions, platformAltText: state.platformAltText, slideAltText: state.slideAltText })); } catch { /* files and media are intentionally excluded */ } }
+function restorePublishingDraft() { try { const saved = JSON.parse(localStorage.getItem(PUBLISHING_RECOVERY_KEY)); if (!saved || typeof saved !== 'object') return; caption.value = String(saved.caption || ''); q('publishing-ai-instruction').value = String(saved.instruction || ''); altText.value = String(saved.altText || ''); state.captionMode = saved.captionMode === 'platform' ? 'platform' : 'generic'; state.altTextMode = saved.altTextMode === 'platform' ? 'platform' : 'generic'; modeSelect.value = saved.mode === 'schedule' ? 'schedule' : 'now'; q('publishing-date').value = String(saved.date || ''); q('publishing-time').value = String(saved.time || ''); (saved.channels || []).forEach(id => state.channels.add(id)); state.generatedRef = String(saved.generatedRef || '') || null; state.mediaRef = saved.mediaRef || ''; state.mediaSource = saved.mediaSource || (state.generatedRef ? 'generated' : 'none'); state.existingMedia = saved.existingMedia || null; state.contentContext = saved.contentContext || {}; state.platformCaptions = saved.platformCaptions || {}; state.platformAltText = saved.platformAltText || {}; state.slideAltText = saved.slideAltText || []; managementStatusName = ['scheduled','sent'].includes(saved.tab) ? saved.tab : 'composer'; } catch { /* invalid recovery data is ignored */ } }
 
 q('publishing-timezone').textContent = `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
 restorePublishingDraft();
@@ -58,9 +60,9 @@ function selectedPlatforms() { return [...state.channels].map(id => ({ key: id, 
 function renderCaptionPrompts(selectedId = '') { const select = q('caption-prompt-select'); if (!select) return; const prompts = loadSavedCaptionPrompts(); select.replaceChildren(new Option('Select Saved Prompt', ''), ...prompts.map(item => new Option(item.name, item.id))); select.value = selectedId; }
 function selectedCaptionPrompt() { const id = q('caption-prompt-select')?.value; return loadSavedCaptionPrompts().find(item => item.id === id) || null; }
 function manageCaptionPrompt(action) { const instruction = q('publishing-ai-instruction'); const current = selectedCaptionPrompt(); try { if (action === 'save') { const name = prompt('Saved caption prompt name:'); if (!name) return; const item = saveCaptionPrompt(name, instruction.value); renderCaptionPrompts(item.id); } if (action === 'rename') { if (!current) return; const name = prompt('Rename saved caption prompt:', current.name); if (!name) return; renameCaptionPrompt(current.id, name); renderCaptionPrompts(current.id); } if (action === 'duplicate') { if (!current) return; const item = duplicateCaptionPrompt(current.id); renderCaptionPrompts(item.id); } if (action === 'delete') { if (!current || !confirm(`Delete saved caption prompt "${current.name}"?`)) return; deleteCaptionPrompt(current.id); renderCaptionPrompts(); } } catch (error) { q('publishing-ai-status').textContent = error.message || 'Saved prompt could not be updated.'; } }
-function assistantPayload(mode = state.captionMode) { return { mode, platforms: selectedPlatforms().map(channel => ({ ...channel, channelId: channel.id, id: channel.key })), sourceCaption: caption.value, instruction: q('publishing-ai-instruction').value, controls: { tone: q('publishing-ai-tone').value, length: q('publishing-ai-length').value, hashtags: q('publishing-ai-hashtags').value }, context: state.contentContext }; }
+async function assistantPayload(mode = state.captionMode) { return { media: await attachedMediaInput(state), mode, platforms: selectedPlatforms().map(channel => ({ ...channel, channelId: channel.id, id: channel.key })), sourceCaption: caption.value, instruction: q('publishing-ai-instruction').value, controls: { tone: q('publishing-ai-tone').value, length: q('publishing-ai-length').value, hashtags: q('publishing-ai-hashtags').value }, context: state.contentContext }; }
 function makeButton(id, text, action) { const value = document.createElement('button'); value.type = 'button'; value.textContent = text; value.onclick = action; return value; }
-function renderOptions(host, options, use) { host.replaceChildren(...options.map(option => { const card = document.createElement('article'); card.className = 'publishing-ai-option'; const label = document.createElement('strong'); label.textContent = option.label || 'Option'; const copy = document.createElement('p'); copy.textContent = option.text || ''; card.append(label, copy, makeButton('', 'Use Caption', () => use(option.text || ''))); return card; })); }
+function renderOptions(host, options, use) { host.replaceChildren(...options.map(option => { const card = document.createElement('article'); card.className = 'publishing-ai-option'; const label = document.createElement('strong'); label.textContent = option.label || 'Option'; const copy = document.createElement('p'); copy.textContent = option.text || ''; card.append(label, copy, makeButton('', 'Use Caption', () => { use(option.text || ''); savePublishingDraft(); })); return card; })); }
 function renderCopyWorkspaces() {
   const platformCaptions = q('publishing-platform-captions'); const platformAlt = q('publishing-platform-alt-text'); const selected = selectedPlatforms();
   const platformMode = state.captionMode === 'platform'; const altMode = state.altTextMode === 'platform';
@@ -69,21 +71,22 @@ function renderCopyWorkspaces() {
   q('publishing-ai-generic').hidden = platformMode; q('publishing-ai-copy').hidden = !platformMode; q('publishing-ai-platform').hidden = !platformMode;
   q('caption-mode-generic').classList.toggle('active', !platformMode); q('caption-mode-platform').classList.toggle('active', platformMode);
   q('alt-mode-generic').classList.toggle('active', !altMode); q('alt-mode-platform').classList.toggle('active', altMode);
-  if (platformMode) platformCaptions.replaceChildren(...selected.map(channel => { const wrap = document.createElement('label'); wrap.className = 'publishing-platform-copy'; const title = document.createElement('strong'); title.textContent = channelLabel(channel); const input = document.createElement('textarea'); input.rows = 4; input.value = state.platformCaptions[channel.key] || ''; input.oninput = () => { state.platformCaptions[channel.key] = input.value; }; const regenerate = makeButton('', `Regenerate ${String(channel.service || 'platform').replace(/^./, x => x.toUpperCase())}`, () => generateOnePlatform(channel)); wrap.append(title, input, regenerate); return wrap; }));
-  if (altMode) platformAlt.replaceChildren(...selected.map(channel => { const wrap = document.createElement('label'); wrap.className = 'publishing-platform-copy'; const title = document.createElement('strong'); title.textContent = `${channelLabel(channel)} Alt Text`; const input = document.createElement('textarea'); input.rows = 3; input.maxLength = 500; input.value = state.platformAltText[channel.key] || ''; input.oninput = () => { state.platformAltText[channel.key] = input.value; }; wrap.append(title, input); return wrap; }));
-  if (state.slideAltText.length) { const slides = document.createElement('div'); slides.className = 'publishing-carousel-alt'; state.slideAltText.forEach((value, index) => { const label = document.createElement('label'); label.textContent = `Slide ${index + 1} Alt Text`; const input = document.createElement('textarea'); input.rows = 3; input.maxLength = 500; input.value = value; input.oninput = () => { state.slideAltText[index] = input.value; }; label.append(input); slides.append(label); }); platformAlt.hidden = false; platformAlt.replaceChildren(makeButton('', '✨ Generate Alt Text for All Slides', () => generateAssistant('alt')), slides); q('publishing-ai-alt').hidden = true; } else q('publishing-ai-alt').hidden = altMode;
+  if (platformMode) platformCaptions.replaceChildren(...selected.map(channel => { const wrap = document.createElement('label'); wrap.className = 'publishing-platform-copy'; const title = document.createElement('strong'); title.textContent = channelLabel(channel); const input = document.createElement('textarea'); input.rows = 4; input.value = state.platformCaptions[channel.key] || ''; input.oninput = () => { state.platformCaptions[channel.key] = input.value; savePublishingDraft(); }; const regenerate = makeButton('', `Regenerate ${String(channel.service || 'platform').replace(/^./, x => x.toUpperCase())}`, () => generateOnePlatform(channel)); wrap.append(title, input, regenerate); return wrap; }));
+  if (altMode) platformAlt.replaceChildren(...selected.map(channel => { const wrap = document.createElement('label'); wrap.className = 'publishing-platform-copy'; const title = document.createElement('strong'); title.textContent = `${channelLabel(channel)} Alt Text`; const input = document.createElement('textarea'); input.rows = 3; input.maxLength = 500; input.value = state.platformAltText[channel.key] || ''; input.oninput = () => { state.platformAltText[channel.key] = input.value; savePublishingDraft(); }; wrap.append(title, input); return wrap; }));
+  if (state.slideAltText.length) { const slides = document.createElement('div'); slides.className = 'publishing-carousel-alt'; state.slideAltText.forEach((value, index) => { const label = document.createElement('label'); label.textContent = `Slide ${index + 1} Alt Text`; const input = document.createElement('textarea'); input.rows = 3; input.maxLength = 500; input.value = value; input.oninput = () => { state.slideAltText[index] = input.value; savePublishingDraft(); }; label.append(input); slides.append(label); }); platformAlt.hidden = false; platformAlt.replaceChildren(makeButton('', '✨ Generate Alt Text for All Slides', () => generateAssistant('alt')), slides); q('publishing-ai-alt').hidden = true; } else q('publishing-ai-alt').hidden = altMode;
 }
 async function generateAssistant(kind, platformOnly = false) {
   const status = q(kind === 'caption' ? 'publishing-ai-status' : 'publishing-alt-status'); const trigger = q(kind === 'caption' ? (platformOnly ? 'publishing-ai-platform' : 'publishing-ai-generic') : 'publishing-ai-alt');
   trigger.disabled = true; showProcessing({ title: kind === 'caption' ? 'Writing your captions…' : (state.carouselSlides.length ? 'Generating slide descriptions…' : 'Generating Alt Text…'), message: kind === 'caption' ? 'Creating caption options for your selected channels.' : (state.carouselSlides.length ? 'Creating accessibility descriptions for each carousel slide.' : 'Creating an accessibility description for your content.') }); status.textContent = kind === 'caption' ? (platformOnly ? 'Generating platform variations…' : 'Generating caption options…') : 'Generating Alt Text…';
-  try { const response = await fetch(`/api/ai/generate-${kind === 'caption' ? 'caption' : 'alt-text'}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(assistantPayload(platformOnly ? 'platform' : state.captionMode)) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.');
+  try { const response = await fetch(`/api/ai/generate-${kind === 'caption' ? 'caption' : 'alt-text'}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(await assistantPayload(platformOnly ? 'platform' : state.captionMode)) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.');
     if (kind === 'caption') { const host = q('publishing-ai-results'); if (platformOnly) { host.replaceChildren(...selectedPlatforms().flatMap(channel => { const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const options = data.platformCaptions?.[channel.key] || []; const container = document.createElement('div'); renderOptions(container, options, text => { state.platformCaptions[channel.key] = text; renderCopyWorkspaces(); }); return [heading, container]; })); } else renderOptions(host, data.options || [], text => { caption.value = text; }); } else if (data.slideAltText) { state.slideAltText = data.slideAltText; status.textContent = 'Alt Text generated for all carousel slides.'; } else { altText.value = data.altText || ''; }
+    savePublishingDraft(); renderCopyWorkspaces();
     if (kind === 'caption') status.textContent = 'Caption options are ready. Choose one to use it.'; else if (!data.slideAltText) status.textContent = 'Alt Text is ready to edit.';
   } catch (error) { status.textContent = error.message || 'AI generation failed. Your existing content is unchanged.'; } finally { hideProcessing(); trigger.disabled = false; }
 }
 async function generateOnePlatform(channel) {
   const status = q('publishing-ai-status'); showProcessing({ title: 'Writing your captions…', message: 'Creating caption options for your selected channels.' }); status.textContent = `Generating ${channel.service || 'platform'} variations…`;
-  try { const response = await fetch('/api/ai/generate-caption', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...assistantPayload('platform'), platforms: [channel] }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.'); const options = data.platformCaptions?.[channel.key] || []; const host = q('publishing-ai-results'); const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const result = document.createElement('div'); renderOptions(result, options, text => { state.platformCaptions[channel.key] = text; renderCopyWorkspaces(); }); host.replaceChildren(heading, result); status.textContent = `${channel.service || 'Platform'} options are ready.`; } catch (error) { status.textContent = error.message || 'AI generation failed. Your caption is unchanged.'; } finally { hideProcessing(); }
+  try { const response = await fetch('/api/ai/generate-caption', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...await assistantPayload('platform'), platforms: [channel] }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.'); const options = data.platformCaptions?.[channel.key] || []; const host = q('publishing-ai-results'); const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const result = document.createElement('div'); renderOptions(result, options, text => { state.platformCaptions[channel.key] = text; renderCopyWorkspaces(); }); host.replaceChildren(heading, result); status.textContent = `${channel.service || 'Platform'} options are ready.`; } catch (error) { status.textContent = error.message || 'AI generation failed. Your caption is unchanged.'; } finally { hideProcessing(); }
 }
 
 function setMediaState(source, message = 'Text-only post') {
@@ -226,6 +229,7 @@ async function uploadOnce() {
 }
 
 function reset() {
+  state.mediaRef = '';
   state.media = null;
   state.uploaded = null;
   state.generatedRef = null;
@@ -273,7 +277,7 @@ document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
   };
 });
 
-mediaInput.onchange = (event) => {
+mediaInput.onchange = async (event) => {
   const file = event.target.files[0];
   if (!file) return;
   if (!supportedManualMedia.has(file.type)) { out.textContent = 'Use PNG, JPG, WebP, MP4, MOV, or WebM media.'; mediaInput.value = ''; return; }
@@ -283,17 +287,19 @@ mediaInput.onchange = (event) => {
   clearGeneratedMedia();
   state.carouselSlides = [];
   state.existingMedia = null;
+  state.contentContext = {}; state.slideAltText = []; state.platformAltText = {}; altText.value = '';
   setMediaState('manual');
   const url = URL.createObjectURL(file);
   const holder = q('publishing-media'); holder.replaceChildren();
   const media = document.createElement(file.type.startsWith('video/') ? 'video' : 'img'); media.src = url; if (media.tagName === 'VIDEO') { media.controls = true; media.onloadedmetadata = () => { const meta = document.createElement('small'); meta.className = 'publishing-media-meta'; meta.textContent = `${file.name} · ${bytesLabel(file.size)} · ${Math.round(media.duration || 0)} seconds`; holder.append(meta); }; } else media.alt = 'Selected media preview'; holder.append(media); if (media.tagName !== 'VIDEO') { const meta = document.createElement('small'); meta.className = 'publishing-media-meta'; meta.textContent = `${file.name} · ${bytesLabel(file.size)}`; holder.append(meta); }
+  try { state.mediaRef = await savePublishingMedia(file); savePublishingDraft(); } catch (error) { out.textContent = 'Media loaded, but reload recovery failed: ' + error.message; }
 };
 
 button.onclick = async () => {
   if (state.busy) return;
   const selected = selectedPlatforms();
   const missingPlatformCaption = state.captionMode === 'platform' && selected.some(channel => !(state.platformCaptions[channel.key] || '').trim());
-  const activeCaption = state.captionMode === 'platform' ? (missingPlatformCaption ? '' : (caption.value.trim() || state.platformCaptions[selected[0]?.id] || '')) : caption.value;
+  const activeCaption = state.captionMode === 'platform' ? (missingPlatformCaption ? '' : (caption.value.trim() || state.platformCaptions[selected[0]?.key] || '')) : caption.value;
   if (!activeCaption.trim() || !state.channels.size) {
     out.textContent = state.captionMode === 'platform' && missingPlatformCaption ? 'Add a caption for every selected channel.' : 'Add a caption and select at least one channel.';
     return;
@@ -367,8 +373,9 @@ document.addEventListener('publishing:generated', async (event) => {
   state.carouselSlides = [];
   state.existingMedia = null;
   mediaInput.value = '';
+  altText.value = ''; state.platformAltText = {}; state.platformCaptions = {};
   caption.value = [result.headline, result.supportingCopy, result.cta].filter(Boolean).join('\n\n');
-  state.contentContext = { ...state.contentContext, headline: result.headline || '', supportingCopy: result.supportingCopy || '', cta: result.cta || '', carousel: result.carousel || null, brand: { name: brand.name || 'Upplai' } };
+  state.contentContext = { ...state.contentContext, headline: result.headline || '', supportingCopy: result.supportingCopy || '', cta: result.cta || '', carousel: result.carousel || null, brand: { name: brand.name || 'Upplai', aiInstruction: brand.aiInstruction || '' } };
   state.slideAltText = Array.isArray(result.carousel?.slides) ? result.carousel.slides.map(() => '') : [];
 
   const asset = await loadCalendarAsset(result.resultRef);
@@ -381,6 +388,7 @@ document.addEventListener('publishing:generated', async (event) => {
     if (['carousel', 'multi-page'].includes(asset.type)) { state.carouselSlides = (asset.slides || []).map(slide => { const node = document.createElement('template'); node.innerHTML = slide.html; return node.content.firstElementChild; }); if (!state.carouselSlides.length || state.carouselSlides.some(slide => !slide)) throw new Error('Generated carousel could not be loaded. Return to Carousel and try again.'); state.carouselIndex = 0; renderPublishingCarousel(); } else prepareGeneratedMediaPreview(); setMediaState('generated'); out.textContent = asset.type === 'carousel' ? 'Carousel loaded with all slides. Publishing will upload them in this order when you confirm.' : asset.type === 'multi-page' ? 'Multi-page design loaded with all pages. Publishing will upload them in this order when you confirm.' : 'Generated design ready for publishing.';
   }
   renderCopyWorkspaces();
+  savePublishingDraft(); showPublishingTab('composer');
   document.dispatchEvent(new Event('navigate:publishing'));
   console.info('[CAROUSEL PUBLISH] 8. complete');
   } catch (error) {
@@ -473,3 +481,31 @@ document.querySelectorAll('[data-publishing-tab]').forEach(button => { button.on
 q('publishing-management-refresh').onclick = loadManagement;
 caption.addEventListener('input', savePublishingDraft); altText.addEventListener('input', savePublishingDraft); q('publishing-ai-instruction').addEventListener('input', savePublishingDraft); modeSelect.addEventListener('change', savePublishingDraft); q('publishing-date').addEventListener('input', savePublishingDraft); q('publishing-time').addEventListener('input', savePublishingDraft);
 if (managementStatusName !== 'composer') showPublishingTab(managementStatusName);
+
+// Rehydrate media without replaying the handoff (which would overwrite edited copy).
+async function restorePublishingMedia() {
+  try {
+    if (state.mediaSource === 'generated' && state.generatedRef) {
+      const asset = await loadCalendarAsset(state.generatedRef);
+      if (!asset) throw new Error('Saved design is unavailable. Send it to Publishing again.');
+      const node = html => { const template = document.createElement('template'); template.innerHTML = html || ''; return template.content.firstElementChild; };
+      state.carouselSlides = ['carousel','multi-page'].includes(asset.type) ? asset.slides.map(slide => node(slide.html)) : [];
+      state.generatedPreview = state.carouselSlides[0] || node(asset.html);
+      if (state.carouselSlides.length) renderPublishingCarousel(); else prepareGeneratedMediaPreview();
+      setMediaState('generated');
+    } else if (state.mediaSource === 'manual' && state.mediaRef) {
+      const asset = await loadCalendarAsset(state.mediaRef);
+      if (!asset?.file) throw new Error('Saved upload is unavailable. Please attach it again.');
+      state.media = asset.file;
+      const media = document.createElement(state.media.type.startsWith('video/') ? 'video' : 'img');
+      media.src = URL.createObjectURL(state.media); if (media.tagName === 'VIDEO') media.controls = true;
+      q('publishing-media').replaceChildren(media); setMediaState('manual');
+    } else if (state.mediaSource === 'existing-url' && state.existingMedia?.url) {
+      const media = document.createElement(state.existingMedia.resourceType === 'video' ? 'video' : 'img'); media.src = state.existingMedia.url; if (media.tagName === 'VIDEO') media.controls = true;
+      q('publishing-media').replaceChildren(media); setMediaState('existing-url');
+    }
+  } catch (error) { out.textContent = error.message; setMediaState('none', error.message); }
+}
+restorePublishingMedia();
+document.getElementById('section-publishing')?.addEventListener('change', savePublishingDraft);
+window.addEventListener('pagehide', savePublishingDraft);

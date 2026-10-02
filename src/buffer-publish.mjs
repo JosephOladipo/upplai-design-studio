@@ -46,13 +46,16 @@ export function buildPlatformMetadata(channel, media, caption, tiktokTitle = '')
   if (channel?.service === 'tiktok') return buildTikTokPostInput(media, tiktokTitle, caption);
   return undefined;
 }
-function assetsFor(media) {
+const altTextServices = new Set(['x', 'twitter', 'mastodon', 'threads', 'linkedin', 'pinterest', 'facebook', 'instagram', 'bluesky']);
+const cleanAltText = value => typeof value === 'string' ? value.trim().slice(0, 2000) : '';
+
+function assetsFor(media, altText = '', slideAltText = []) {
   if (!media) return undefined;
-  if (media.type === 'carousel') return media.items.map(item => ({ image: { url: item.url } }));
-  return media.resourceType === 'video' ? [{ video: { url: media.url } }] : [{ image: { url: media.url } }];
+  if (media.type === 'carousel') return media.items.map((item, index) => ({ image: { url: item.url, ...(cleanAltText(slideAltText[index] || altText) ? { metadata: { altText: cleanAltText(slideAltText[index] || altText) } } : {}) } }));
+  return media.resourceType === 'video' ? [{ video: { url: media.url } }] : [{ image: { url: media.url, ...(cleanAltText(altText) ? { metadata: { altText: cleanAltText(altText) } } : {}) } }];
 }
 
-export async function publishPosts({ apiKey, text, channelTexts = {}, tiktokTitle = '', channelIds, mode, dueAt, media, fetcher = fetch, mediaVerifier = verifyHostedMedia }) {
+export async function publishPosts({ apiKey, text, channelTexts = {}, tiktokTitle = '', accessibility = {}, channelIds, mode, dueAt, media, fetcher = fetch, mediaVerifier = verifyHostedMedia }) {
   const channels = await getBufferChannels({ apiKey, fetcher });
   const channelById = new Map(channels.map(channel => [channel.id, channel]));
   const results = [];
@@ -84,7 +87,10 @@ export async function publishPosts({ apiKey, text, channelTexts = {}, tiktokTitl
     const metadata = buildPlatformMetadata(channel, preparedMedia, channelText, tiktokTitle);
     if (channel.service === 'tiktok' && metadata?.tiktok?.title) console.info('[TikTok Title]', { source: String(tiktokTitle || '').trim() ? 'headline' : 'caption-fallback', rawLength: String(tiktokTitle || channelText || '').length, finalLength: metadata.tiktok.title.length });
 
-    const assets = assetsFor(preparedMedia);
+    const requestedAlt = accessibility.altTextMode === 'platform' ? accessibility.platformAltText?.[channelId] : accessibility.genericAltText;
+    const altText = altTextServices.has(channel.service) ? cleanAltText(requestedAlt) : '';
+    const slideAltText = altTextServices.has(channel.service) ? accessibility.carouselSlideAltText : [];
+    const assets = assetsFor(preparedMedia, altText, slideAltText);
     const query = `mutation CreatePost($input: CreatePostInput!) { createPost(input: $input) { ... on PostActionSuccess { post { id status dueAt } } ... on MutationError { message } } }`;
     const input = { text: channelText, channelId, schedulingType: 'automatic', mode, ...(dueAt ? { dueAt } : {}), ...(assets ? { assets } : {}), ...(metadata ? { metadata } : {}) };
 

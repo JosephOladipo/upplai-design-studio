@@ -39,7 +39,7 @@ test('creates a normalized manual row after the current highest order', () => {
   assert.equal(result.row.order, 5);
   assert.equal(result.row.status, 'ready');
   assert.equal(result.row.style, 'openai-style');
-  assert.deepEqual(result.row.ai, { visualStyle: 'editorial', subjectType: 'none', composition: 'left', direction: 'Leave room for text.', quality: 'premium' });
+  assert.deepEqual(result.row.ai, { visualStyle: 'editorial', subjectType: 'none', composition: 'left', direction: 'Leave room for text.', quality: 'premium', renderMode: 'visual-native-text', designPrompt: '' });
   const storage = memory();
   saveCalendar([...existing, result.row], storage);
   assert.equal(loadCalendar(storage).rows[1].id, result.row.id);
@@ -107,7 +107,7 @@ test('imports template-like CSV with two normalized rows', () => {
   const result = importCalendarCsv(`${header}\n${local}\n${ai}`);
   assert.equal(result.rows.length, 2);
   assert.equal(result.rows[0].style, 'bold-statement');
-  assert.deepEqual(result.rows[1].ai, { visualStyle: 'editorial', subjectType: 'none', composition: 'left', direction: 'Quiet, clean space', quality: 'draft' });
+  assert.deepEqual(result.rows[1].ai, { visualStyle: 'editorial', subjectType: 'none', composition: 'left', direction: 'Quiet, clean space', quality: 'draft', renderMode: 'visual-native-text', designPrompt: '' });
 });
 
 test('CSV parser supports quoted commas, escaped quotes, CRLF, LF, BOM and blank lines', () => {
@@ -120,7 +120,7 @@ test('normalizes labels and defaults older CSV files', () => {
   const result = importCalendarCsv('date,headline,supportingcopy,cta,designmethod\n2026/09/21,Hello,Copy,,');
   assert.equal(result.rows.length, 1); assert.equal(result.rows[0].date, '2026-09-21');
   assert.equal(result.rows[0].style, 'premium-editorial');
-  assert.deepEqual(result.rows[0].ai, { visualStyle: 'auto', subjectType: 'auto', composition: 'auto', direction: '', quality: 'draft' });
+  assert.deepEqual(result.rows[0].ai, { visualStyle: 'auto', subjectType: 'auto', composition: 'auto', direction: '', quality: 'draft', renderMode: 'visual-native-text', designPrompt: '' });
 });
 
 test('reports invalid rows while retaining valid ordered rows', () => {
@@ -135,7 +135,7 @@ test('reports invalid rows while retaining valid ordered rows', () => {
 test('forgives optional AI guidance and fingerprints deterministically', () => {
   const result = importCalendarCsv(`${header}\n2026-09-21,Hello,,,OpenAI Style,Wrong,Alien,Diagonal,,Ultra`);
   assert.equal(result.rows.length, 1); assert.equal(result.errors.length, 0);
-  assert.deepEqual(result.rows[0].ai, { visualStyle: 'auto', subjectType: 'auto', composition: 'auto', direction: 'Alien. Diagonal composition.', quality: 'draft' });
+  assert.deepEqual(result.rows[0].ai, { visualStyle: 'auto', subjectType: 'auto', composition: 'auto', direction: 'Alien. Diagonal composition.', quality: 'draft', renderMode: 'visual-native-text', designPrompt: '' });
   const row = importCalendarCsv(`${header}\n${local}`).rows[0];
   assert.equal(row.inputFingerprint, fingerprint(row));
 });
@@ -183,8 +183,19 @@ test('imports legacy AI design labels into supported options and preserves resum
     subjectType: 'auto',
     composition: 'auto',
     direction: 'Resume with highlighted proof points. Split composition.',
-    quality: 'draft'
+    quality: 'draft',
+    renderMode: 'visual-native-text',
+    designPrompt: ''
   });
+});
+
+test('calendar rows retain Full AI Artwork mode and design prompt under the same row identity', () => {
+  const created = createManualRow({ date: '2026-09-26', headline: 'White canvas', style: 'OpenAI Style', renderMode: 'full-ai-artwork', designPrompt: 'Use a rich navy background.' }).row;
+  const updated = updateManualRow({ ...created, status: 'generated', resultRef: 'calendar-result:one' }, { date: created.date, headline: created.headline, style: 'OpenAI Style', renderMode: 'full-ai-artwork', designPrompt: 'Use a rich navy background.' }).row;
+  assert.equal(created.ai.renderMode, 'full-ai-artwork');
+  assert.equal(created.ai.designPrompt, 'Use a rich navy background.');
+  assert.equal(updated.id, created.id);
+  assert.equal(updated.resultRef, 'calendar-result:one');
 });
 
 test('imports friendly optional guidance, preserves order, and reports compact adjustment counts', () => {

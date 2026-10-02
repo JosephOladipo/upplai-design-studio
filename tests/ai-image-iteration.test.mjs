@@ -10,7 +10,9 @@ const plan = { imageStyle: 'editorial', subjectPlacement: 'right', imagePrompt: 
 test('refinement uses the supported OpenAI Images edit API with a reference image in live mode', async () => {
   const image = await source('../src/openai-image.mjs');
   assert.match(image, /client\.images\.edit/);
-  assert.match(image, /input_fidelity: 'high'/);
+  assert.doesNotMatch(image, /input_fidelity/);
+  assert.match(image, /artworkInstructions\(copy\.customDirection\)/);
+  assert.match(image, /background: backgroundPolicy === 'white'/);
   assert.match(image, /Do not add text, logos, or watermarks/);
 });
 

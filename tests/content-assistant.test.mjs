@@ -34,6 +34,22 @@ test('assistant input strips excessive and malformed values safely', () => {
   assert.equal(normalized.platforms.length, 1);
 });
 
+test('live caption requests send attached media as vision input and retain structured context', async () => {
+  let request;
+  const client = { responses: { create: async value => { request = value; return { output_text: JSON.stringify({ options: [{ id: 'concise', label: 'Concise', text: 'Visible post.' }, { id: 'value-driven', label: 'Value', text: 'Visible post value.' }, { id: 'conversational', label: 'Conversation', text: 'Visible post conversation.' }] }) }; } } };
+  await generateCaptionOptions({ config: { mockMode: false, designModel: 'test' }, client, input: { ...input, media: { kind: 'images', images: ['data:image/png;base64,aGVsbG8='] } } });
+  assert.equal(request.input[0].content[1].type, 'input_image');
+  assert.match(request.input[0].content[0].text, /Interview preparation/);
+  assert.match(request.instructions, /primary source of truth/);
+});
+
+test('video-frame analysis states its real limitation in the request', async () => {
+  let request;
+  const client = { responses: { create: async value => { request = value; return { output_text: JSON.stringify({ altText: 'A visible video frame.' }) }; } } };
+  await generateAltText({ config: { mockMode: false, designModel: 'test' }, client, input: { ...input, media: { kind: 'video-frame', images: ['data:image/jpeg;base64,aGVsbG8='] } } });
+  assert.match(request.input[0].content[0].text, /Sampled video frame only/);
+});
+
 test('platform-specific Buffer text maps to its matching channel while legacy text remains compatible', async () => {
   const sent = [];
   const fetcher = async (_url, request) => {
@@ -61,6 +77,15 @@ test('Buffer sends an ordered carousel asset list as one post per selected chann
   assert.deepEqual(creates[0].variables.input.assets.map(asset => asset.image.url), ['https://cdn.test/1.png', 'https://cdn.test/2.png']);
   assert.equal(creates[0].variables.input.metadata.facebook.type, 'post');
   assert.equal(creates[1].variables.input.metadata, undefined);
+});
+
+test('Buffer adds image alt text only for platforms that support it', async () => {
+  const sent = [];
+  const fetcher = async (_url, request) => { const body = JSON.parse(request.body); sent.push(body); if (body.query.includes('GetOrganizations')) return { ok: true, status: 200, json: async () => ({ data: { account: { organizations: [{ id: 'org' }] } } }) }; if (body.query.includes('GetChannels')) return { ok: true, status: 200, json: async () => ({ data: { channels: [{ id: 'linkedin', service: 'linkedin', name: 'LinkedIn' }, { id: 'tiktok', service: 'tiktok', name: 'TikTok' }] } }) }; return { ok: true, status: 200, json: async () => ({ data: { createPost: { post: { id: 'post', status: 'sent' } } } }) }; };
+  await publishPosts({ apiKey: 'test', text: 'Caption', channelIds: ['linkedin', 'tiktok'], mode: 'shareNow', media: { url: 'https://cdn.test/image.png', resourceType: 'image' }, accessibility: { genericAltText: 'A blue Upplai graphic.' }, fetcher, mediaVerifier: async media => ({ ready: true, media }) });
+  const creates = sent.filter(item => item.variables?.input);
+  assert.equal(creates[0].variables.input.assets[0].image.metadata.altText, 'A blue Upplai graphic.');
+  assert.equal(creates[1].variables.input.assets[0].image.metadata, undefined);
 });
 
 test('caption and alt-text API routes work in Mock Mode without exposing credentials', async () => {

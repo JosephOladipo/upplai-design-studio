@@ -15,6 +15,7 @@ const resetButton = document.getElementById('reset-brand-kit');
 const status = document.getElementById('brand-kit-status');
 const fields = {
   brandName: document.getElementById('brandName'),
+  aiInstruction: document.getElementById('brandAiInstruction'),
   heading: document.getElementById('brandHeadingFont'),
   body: document.getElementById('brandBodyFont')
 };
@@ -98,11 +99,11 @@ for (const [key, input] of Object.entries(logoFields)) {
 
 function fillForm(brandKit) {
   fields.brandName.value = brandKit.brandName;
+  fields.aiInstruction.value = brandKit.aiInstruction || '';
   for (const key of Object.keys(colorFields)) setColor(key, brandKit.colors[key]);
   fields.heading.value = brandKit.fonts.heading;
   fields.body.value = brandKit.fonts.body;
 }
-
 function readColors() {
   const colors = {};
   for (const key of Object.keys(colorFields)) {
@@ -120,7 +121,8 @@ function readForm() {
   return {
     ...loadBrandKit(),
     brandName: fields.brandName.value.trim(),
-    colors,
+aiInstruction: fields.aiInstruction.value.trim(),
+colors,
     logos: { ...logos },
     fonts: { heading: fields.heading.value, body: fields.body.value }
   };

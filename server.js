@@ -41,6 +41,7 @@ const mediaUpload = multer({ storage: multer.diskStorage({ destination: mediaTem
 const port = process.env.PORT || 3000;
 let aiBusy = false;
 const plans = new Map(); // Short-lived local plans; never persistent content storage.
+app.use(['/api/ai/generate-caption', '/api/ai/generate-alt-text'], express.json({ limit: '16mb' }));
 app.use(express.json({ limit: '32kb' }));
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: 'Upplai Design Studio', bufferConfigured: Boolean(process.env.BUFFER_API_KEY || process.env.BUFFER_CONNECTIONS_JSON), cloudinaryConfigured: Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET), mediaLimits: { imageBytes: MAX_IMAGE_UPLOAD_BYTES, videoBytes: MAX_VIDEO_UPLOAD_BYTES } }));
 function safeDestinations(body) {
@@ -50,13 +51,14 @@ function safeDestinations(body) {
 }
 function safeTikTokTitle(value) { return typeof value === 'string' ? value.slice(0, 1000) : ''; }
 function safeChannelTexts(value) { return value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([id,text]) => typeof id === 'string' && id.length < 250 && typeof text === 'string' && text.trim() && text.length <= 8000).map(([id,text]) => [id,text.trim()])) : {}; }
+function safeAccessibility(value) { const text = item => typeof item === 'string' ? item.trim().slice(0, 2000) : ''; return value && typeof value === 'object' ? { altTextMode: value.altTextMode === 'platform' ? 'platform' : 'generic', genericAltText: text(value.genericAltText), platformAltText: Object.fromEntries(Object.entries(value.platformAltText || {}).filter(([key]) => typeof key === 'string' && key.length < 250).map(([key,item]) => [key,text(item)])), carouselSlideAltText: Array.isArray(value.carouselSlideAltText) ? value.carouselSlideAltText.slice(0, 10).map(text) : [] } : {}; }
 async function connections() { const { getBufferConnections } = await import('./src/buffer-connections.mjs'); return getBufferConnections(); }
 app.post('/api/publishing/posts', async (req,res) => {
-  const body=req.body||{}; const validMode=['shareNow','customScheduled'].includes(body.mode); const destinations=safeDestinations(body); const channelTexts=safeChannelTexts(body.channelTexts); const tiktokTitle=safeTikTokTitle(body.tiktokTitle); const safeUrl=value=>typeof value==='string'&&value.length<=2000&&/^https:\/\//i.test(value); const singleMedia=!body.media||safeUrl(body.media?.url); const carouselMedia=body.media?.type==='carousel'&&Array.isArray(body.media.items)&&body.media.items.length>=2&&body.media.items.length<=10&&body.media.items.every(item=>safeUrl(item?.url)&&item.resourceType==='image');
+  const body=req.body||{}; const validMode=['shareNow','customScheduled'].includes(body.mode); const destinations=safeDestinations(body); const channelTexts=safeChannelTexts(body.channelTexts); const accessibility=safeAccessibility(body.accessibility); const tiktokTitle=safeTikTokTitle(body.tiktokTitle); const safeUrl=value=>typeof value==='string'&&value.length<=2000&&/^https:\/\//i.test(value); const singleMedia=!body.media||safeUrl(body.media?.url); const carouselMedia=body.media?.type==='carousel'&&Array.isArray(body.media.items)&&body.media.items.length>=2&&body.media.items.length<=10&&body.media.items.every(item=>safeUrl(item?.url)&&item.resourceType==='image');
   if(!validMode||!destinations.length||typeof body.text!=='string'||!body.text.trim()) return failure(res,400,'INVALID_INPUT','Add content and select at least one channel.');
   if(body.media&&!(singleMedia||carouselMedia)) return failure(res,400,'INVALID_MEDIA','Choose valid public media before publishing.');
   if(body.mode==='customScheduled'&&(!body.dueAt||Number.isNaN(Date.parse(body.dueAt))||Date.parse(body.dueAt)<=Date.now())) return failure(res,400,'INVALID_SCHEDULE','Choose a future schedule time.');
-  try { const { publishAcrossConnections }=await import('./src/buffer-connections.mjs'); const results=await publishAcrossConnections({connections:await connections(),destinations,text:body.text.trim(),channelTexts,tiktokTitle,mode:body.mode,dueAt:body.mode==='customScheduled'?body.dueAt:undefined,media:body.media}); res.json({published:results.some(x=>x.success),results}); }
+  try { const { publishAcrossConnections }=await import('./src/buffer-connections.mjs'); const results=await publishAcrossConnections({connections:await connections(),destinations,text:body.text.trim(),channelTexts,tiktokTitle,accessibility,mode:body.mode,dueAt:body.mode==='customScheduled'?body.dueAt:undefined,media:body.media}); res.json({published:results.some(x=>x.success),results}); }
   catch(error) { failure(res,error?.code==='NOT_CONFIGURED'||error?.code==='CONFIGURATION'?503:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer publishing failed.'); }
 });
 app.get('/api/buffer/posts', async (req, res) => { const status=req.query.status; if(!['scheduled','sent'].includes(status)) return failure(res,400,'INVALID_INPUT','Choose scheduled or sent posts.'); try { const { aggregateBufferPosts }=await import('./src/buffer-connections.mjs'); const result=await aggregateBufferPosts({connections:await connections(),status}); res.json(result); } catch(error) { failure(res,error?.code==='NOT_CONFIGURED'||error?.code==='CONFIGURATION'?503:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer posts are unavailable.'); } });
@@ -164,7 +166,7 @@ app.post('/api/ai/design-plan', async (req, res) => {
     const { visualStyles, subjectTypes, compositions } = await import('./src/ai-plan.mjs');
     const input = req.body || {};
     const subjectType = input.subjectType === undefined ? 'auto' : input.subjectType;
-    for (const [key, max] of Object.entries({ headline: 180, supportingCopy: 700, cta: 70, customDirection: 600 })) {
+    for (const [key, max] of Object.entries({ headline: 180, supportingCopy: 700, cta: 70, customDirection: 1200 })) {
       if (typeof input[key] !== 'string' || input[key].length > max) return failure(res, 400, 'INVALID_INPUT', 'Invalid or excessive ' + key + '.');
     }
     if (!input.headline.trim() || !visualStyles.includes(input.visualStyle) || !subjectTypes.includes(subjectType) || !['auto', ...compositions].includes(input.composition)) return failure(res, 400, 'INVALID_INPUT', 'Add a headline and choose valid design options.');
@@ -180,7 +182,16 @@ app.post('/api/ai/design-plan', async (req, res) => {
     for (const [id, entry] of plans) if (entry.expires < Date.now()) plans.delete(id);
     if (plans.size >= 50) plans.delete(plans.keys().next().value);
     const planId = randomUUID();
-    plans.set(planId, { plan, renderMode: sanitized.renderMode, headline: sanitized.headline, supportingCopy: sanitized.supportingCopy, cta: sanitized.cta, expires: Date.now() + 24 * 60 * 60 * 1000 });
+   plans.set(planId, {
+  plan,
+  renderMode: sanitized.renderMode,
+  headline: sanitized.headline,
+  supportingCopy: sanitized.supportingCopy,
+  cta: sanitized.cta,
+  customDirection: sanitized.customDirection,
+  brandContext: sanitized.brandContext || null,
+  expires: Date.now() + 24 * 60 * 60 * 1000
+});
     res.json({ plan, planId, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
@@ -194,7 +205,7 @@ app.post('/api/ai/generate-visual', async (req, res) => {
   aiBusy = true;
   try {
     const { generateVisual } = await import('./src/openai-image.mjs');
-    const result = await generateVisual({ config, plan: entry.plan, quality, fullArtwork: entry.renderMode === 'full-ai-artwork', copy: entry });
+    const result = await generateVisual({ config, plan: entry.plan, quality, fullArtwork: entry.renderMode === 'full-ai-artwork', copy: entry, brandInstruction: entry.brandContext?.aiInstruction || '' });
     res.json({ ...result, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
@@ -214,7 +225,7 @@ app.post('/api/ai/refine-visual', (req, res, next) => aiImageUpload.single('imag
   aiBusy = true;
   try {
     const { refineVisual } = await import('./src/openai-image.mjs');
-    const result = await refineVisual({ config, plan: entry.plan, quality, image: req.file, instruction, fullArtwork: entry.renderMode === 'full-ai-artwork' });
+    const result = await refineVisual({ config, plan: entry.plan, quality, image: req.file, instruction, copy: entry, brandInstruction: entry.brandContext?.aiInstruction || '', fullArtwork: entry.renderMode === 'full-ai-artwork' });
     res.json({ ...result, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
