@@ -92,13 +92,13 @@ function mediaFailure(error, file) {
   designModel: config.designModel, imageModel: config.imageModel, imageEngine: 'OpenAI Images API',
   defaultQuality: Object.keys(qualityMap).find(k => qualityMap[k] === config.quality) || 'draft', error: config.error }));
 function failure(res, status, code, message) { res.status(status).json({ error: { code, message } }); }
-function checkRequest(req, res, multipart = false) {
+function checkRequest(req, res, multipart = false, allowConcurrent = false) {
   if (!(multipart ? req.is('multipart/form-data') : req.is('application/json')) || (req.headers.origin && req.headers.origin !== 'http://' + req.headers.host)) {
     failure(res, 403, 'REQUEST_BLOCKED', 'Use the local application to generate designs.'); return false;
   }
   if (config.error) { failure(res, 503, 'CONFIGURATION', config.error); return false; }
   if (!config.mockMode && !config.apiKey) { failure(res, 503, 'NOT_CONFIGURED', 'Add OPENAI_API_KEY on the server, or use OPENAI_MOCK_MODE=true.'); return false; }
-  if (aiBusy) { failure(res, 429, 'BUSY', 'A design request is already running. Please wait.'); return false; }
+  if (aiBusy && !allowConcurrent) { failure(res, 429, 'BUSY', 'A design request is already running. Please wait.'); return false; }
   return true;
 }
 function reportError(res, error) {
@@ -124,14 +124,13 @@ function validAssistantBody(value) {
   return textFields.every(field => field === undefined || (typeof field === 'string' && field.length <= 4000));
 }
 async function assistantRoute(req, res, type) {
-  if (!checkRequest(req, res) || !validAssistantBody(req.body)) return;
-  aiBusy = true;
+  // Caption and accessibility requests are independent of image/design generation.
+  if (!checkRequest(req, res, false, true) || !validAssistantBody(req.body)) return;
   try {
     const { generateCaptionOptions, generateAltText } = await import('./src/content-assistant.mjs');
     const result = type === 'caption' ? await generateCaptionOptions({ config, input: req.body }) : await generateAltText({ config, input: req.body });
     res.json({ ...result, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
-  finally { aiBusy = false; }
 }
 app.post('/api/ai/generate-caption', (req, res) => assistantRoute(req, res, 'caption'));
 app.post('/api/ai/generate-alt-text', (req, res) => assistantRoute(req, res, 'alt'));

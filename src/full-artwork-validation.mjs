@@ -11,7 +11,10 @@ export function proportionalSafeFrame(width, height) {
 export function normalizeArtworkAssessment(value, backgroundPolicy) {
   const safe = value && value.typographyWithinSafeFrame === true && value.criticalTextPresent === true;
   const background = backgroundPolicy === 'custom' || value?.backgroundCanvas === 'pass';
-  return { accepted: Boolean(safe && background), backgroundAccepted: Boolean(background), safeAreaAccepted: Boolean(safe), reason: !background ? 'The default exposed canvas is not pure white or transparent.' : !safe ? 'Critical typography is outside the required safe frame or missing.' : '' };
+  // The browser deterministically clears eligible edge-connected neutral backdrop
+  // pixels and composites the final default canvas onto #FFFFFF. Vision's
+  // background reading remains diagnostic; critical typography remains the gate.
+  return { accepted: Boolean(safe), backgroundAccepted: Boolean(background), backgroundDiagnostic: value?.backgroundCanvas === 'pass' ? 'pass' : value?.backgroundCanvas === 'fail' ? 'fail' : 'unknown', safeAreaAccepted: Boolean(safe), reason: !safe ? 'Critical typography is outside the required safe frame or missing.' : '' };
 }
 
 export async function assessFullArtwork({ client, config, image, backgroundPolicy }) {

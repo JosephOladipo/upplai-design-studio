@@ -25,7 +25,7 @@ test('publishing recognizes a carousel as ordered media and sends no media until
   const publishing = await source('../public/publishing.js');
   assert.match(publishing, /state\.carouselSlides = \(asset\.slides \|\| \[\]\)/);
   assert.match(publishing, /renderPublishingCarousel\(\)/);
-  assert.match(publishing, /for \(let index = 0; index < state\.carouselSlides\.length; index \+= 1\)/);
+  assert.match(publishing, /const count = state\.carouselFiles\.length \|\| state\.carouselSlides\.length/);
   assert.match(publishing, /type: 'carousel', items/);
   assert.match(publishing, /if \(state\.uploaded\) return state\.uploaded/);
 });

@@ -1080,14 +1080,16 @@ sendToPublish.addEventListener('click', async () => {
   sendToPublish.disabled = true;
   status.textContent = 'Preparing design for publishing…';
   try {
-    const resultRef = `create-result:${Date.now()}`;
-    await saveCalendarAsset(resultRef, {
+    const isPreparedFullArtwork = value.aiRenderMode === 'full-ai-artwork' && aiDesign?.fullArtwork === true && typeof aiDesign.image === 'string';
+    const resultRef = isPreparedFullArtwork ? `full-artwork:${Date.now()}` : `create-result:${Date.now()}`;
+    if (!isPreparedFullArtwork) await saveCalendarAsset(resultRef, {
       preview: preview.cloneNode(true),
       style: currentStyle
     });
     document.dispatchEvent(new CustomEvent('publishing:generated', {
       detail: {
         resultRef,
+        preparedFullArtwork: isPreparedFullArtwork ? aiDesign.image : '',
         source: preview.dataset.editSource || 'create',
         contentType: 'single-image',
         itemId: preview.dataset.itemId || null,

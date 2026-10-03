@@ -18,16 +18,30 @@ async function blobImage(blob) {
 function videoFrame(source) {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video'); video.crossOrigin = 'anonymous'; video.muted = true; video.preload = 'auto';
+    let finished = false;
     const timer = setTimeout(() => finish(new Error('Video frame could not be read. Try a browser-supported video format.')), 15000);
-    function finish(error, data) { clearTimeout(timer); video.onloadeddata = video.onseeked = video.onerror = null; video.removeAttribute('src'); video.load(); error ? reject(error) : resolve(data); }
+    function finish(error, data) { if (finished) return; finished = true; clearTimeout(timer); video.onloadeddata = video.onseeked = video.onerror = null; video.removeAttribute('src'); video.load(); error ? reject(error) : resolve(data); }
     const capture = () => { try { finish(null, { images: [snapshot(video,video.videoWidth,video.videoHeight)], kind: 'video-frame', note: 'One sampled video frame only; no audio or full-video analysis.' }); } catch (error) { finish(error); } };
+    const seekTargets = () => {
+      const targets = video.duration > 1 ? [Math.min(video.duration * .1, 5), 0] : [0]; let index = 0;
+      const seekNext = () => {
+        if (index >= targets.length) { capture(); return; }
+        const target = targets[index++]; let settled = false;
+        const fallback = setTimeout(() => { if (!settled) { settled = true; seekNext(); } }, 3000);
+        video.onseeked = () => { if (!settled) { settled = true; clearTimeout(fallback); capture(); } };
+        try { video.currentTime = target; } catch { clearTimeout(fallback); settled = true; seekNext(); }
+      };
+      seekNext();
+    };
     video.onerror = () => finish(new Error('This browser could not decode the video.'));
-    video.onloadeddata = () => { video.onloadeddata = null; if (Number.isFinite(video.duration) && video.duration > 1) { video.onseeked = capture; video.currentTime = Math.min(video.duration * .1, 5); } else capture(); };
+    video.onloadeddata = () => { video.onloadeddata = null; if (Number.isFinite(video.duration)) seekTargets(); else capture(); };
     video.src = source;
   });
 }
 export async function attachedMediaInput(state) {
+  if (state.carouselFiles?.length) return { kind: 'images', images: await Promise.all(state.carouselFiles.map(blobImage)) };
   if (state.carouselSlides.length) return { kind: 'images', images: await Promise.all(state.carouselSlides.map(async slide => blobImage(await previewPngBlob(slide)))) };
+  if ((state.mediaSource === 'generated' || state.mediaSource === 'generated-direct') && state.media) return { kind: 'images', images: [await blobImage(state.media)] };
   if (state.mediaSource === 'generated') return { kind: 'images', images: [await blobImage(await previewPngBlob(state.generatedPreview))] };
   if (state.mediaSource === 'manual' && state.media) {
     if (state.media.type.startsWith('image/')) return { kind: 'images', images: [await blobImage(state.media)] };

@@ -14,6 +14,7 @@ const state = {
   generatedPreviewUrl: null,
   mediaRef: '',
   carouselSlides: [],
+  carouselFiles: [],
   carouselIndex: 0,
   mediaSource: 'none',
   existingMedia: null,
@@ -91,7 +92,7 @@ async function generateOnePlatform(channel) {
 
 function setMediaState(source, message = 'Text-only post') {
   state.mediaSource = source;
-  const labels = { manual: 'Uploaded media', generated: 'Generated design', 'existing-url': 'Existing media' };
+  const labels = { manual: 'Uploaded media', 'manual-carousel': 'Uploaded carousel', generated: 'Generated design', 'generated-direct': 'Generated design', 'existing-url': 'Existing media' };
   const label = labels[source];
   mediaBadge.hidden = !label;
   mediaBadge.textContent = label || '';
@@ -107,26 +108,46 @@ function clearGeneratedMedia() {
 }
 
 function prepareGeneratedMediaPreview() {
+  if (state.media) {
+    if (state.generatedPreviewUrl) URL.revokeObjectURL(state.generatedPreviewUrl);
+    state.generatedFile = state.media;
+    state.generatedPreviewUrl = URL.createObjectURL(state.media);
+    const image = document.createElement('img');
+    image.src = state.generatedPreviewUrl;
+    image.alt = 'Generated design ready to publish';
+    q('publishing-media').replaceChildren(image);
+    return;
+  }
   if (!state.generatedPreview) throw new Error('Generated design could not be loaded. Return to Design Review and regenerate it.');
-  // Show the exact saved HTML immediately. PNG conversion is deferred until the
-  // user explicitly publishes, so rendering failures cannot block the handoff.
-  state.generatedFile = null;
+  // Recovery fallback for legacy drafts that predate persisted generated PNGs.
   const visiblePreview = state.generatedPreview.cloneNode(true);
   visiblePreview.removeAttribute('id');
   visiblePreview.setAttribute('aria-label', 'Generated design ready to publish');
   q('publishing-media').replaceChildren(visiblePreview);
 }
+
+async function preparedArtworkFile(dataUrl) {
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) throw new Error('Prepared Full AI artwork is unavailable. Generate it again before publishing.');
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  if (!blob.size) throw new Error('Prepared Full AI artwork could not be converted for publishing.');
+  return new File([blob], 'full-ai-artwork.png', { type: 'image/png' });
+}
 function renderPublishingCarousel() {
   const slides = state.carouselSlides;
-  if (!slides.length) return;
+  const total = state.carouselFiles.length || slides.length;
+  if (!total) return;
   const media = q('publishing-media'); const wrap = document.createElement('div'); wrap.className = 'publishing-carousel-preview';
-  const stage = document.createElement('div'); stage.className = 'publishing-carousel-stage'; stage.append(slides[state.carouselIndex].cloneNode(true));
+  const stage = document.createElement('div'); stage.className = 'publishing-carousel-stage';
+  if (state.carouselFiles[state.carouselIndex]) { const image = document.createElement('img'); image.src = URL.createObjectURL(state.carouselFiles[state.carouselIndex]); image.alt = `Generated design slide ${state.carouselIndex + 1}`; stage.append(image); }
+  else stage.append(slides[state.carouselIndex].cloneNode(true));
   const nav = document.createElement('div'); nav.className = 'publishing-carousel-nav';
   const previous = makeButton('', '←', () => { state.carouselIndex = Math.max(0, state.carouselIndex - 1); renderPublishingCarousel(); });
   const position = document.createElement('span'); position.textContent = `${state.carouselIndex + 1} / ${slides.length}`;
-  const next = makeButton('', '→', () => { state.carouselIndex = Math.min(slides.length - 1, state.carouselIndex + 1); renderPublishingCarousel(); });
-  previous.disabled = state.carouselIndex === 0; next.disabled = state.carouselIndex === slides.length - 1; nav.append(previous, position, next);
-  const thumbs = document.createElement('div'); thumbs.className = 'publishing-carousel-thumbs'; slides.forEach((slide, index) => { const thumb = makeButton('', String(index + 1), () => { state.carouselIndex = index; renderPublishingCarousel(); }); thumb.classList.toggle('active', index === state.carouselIndex); thumbs.append(thumb); });
+  const next = makeButton('', '→', () => { state.carouselIndex = Math.min(total - 1, state.carouselIndex + 1); renderPublishingCarousel(); });
+  position.textContent = `${state.carouselIndex + 1} / ${total}`;
+  previous.disabled = state.carouselIndex === 0; next.disabled = state.carouselIndex === total - 1; nav.append(previous, position, next);
+  const thumbs = document.createElement('div'); thumbs.className = 'publishing-carousel-thumbs'; Array.from({ length: total }, (_, index) => { const thumb = makeButton('', String(index + 1), () => { state.carouselIndex = index; renderPublishingCarousel(); }); thumb.classList.toggle('active', index === state.carouselIndex); thumbs.append(thumb); });
   wrap.append(stage, nav, thumbs); media.replaceChildren(wrap);
 }
 
@@ -187,12 +208,13 @@ async function loadChannels() {
 async function uploadOnce() {
   if (state.uploaded) return state.uploaded;
   if (state.mediaSource === 'existing-url') return state.existingMedia;
-  if (state.carouselSlides.length) {
+  if (state.carouselFiles.length || state.carouselSlides.length) {
     showProcessing({ title: 'Uploading your media…', message: 'Preparing your carousel slides for publishing.' });
     try {
       const items = [];
-      for (let index = 0; index < state.carouselSlides.length; index += 1) {
-        const blob = await previewPngBlob(state.carouselSlides[index]);
+      const count = state.carouselFiles.length || state.carouselSlides.length;
+      for (let index = 0; index < count; index += 1) {
+        const blob = state.carouselFiles[index] || await previewPngBlob(state.carouselSlides[index]);
         const form = new FormData();
         form.append('media', new File([blob], `carousel-slide-${String(index + 1).padStart(2, '0')}.png`, { type: 'image/png' }));
         const response = await fetch('/api/media/upload', { method: 'POST', body: form });
@@ -208,15 +230,17 @@ async function uploadOnce() {
   }
   if (state.mediaSource === 'generated') {
     if (!state.generatedPreview) throw new Error('Generated design could not be loaded. Return to Design Review and regenerate it.');
-    const blob = await previewPngBlob(state.generatedPreview);
-    state.generatedFile = new File([blob], 'generated-design.png', { type: 'image/png' });
-    state.media = state.generatedFile;
+    if (!state.media) {
+      const blob = await previewPngBlob(state.generatedPreview);
+      state.generatedFile = new File([blob], 'generated-design.png', { type: 'image/png' });
+      state.media = state.generatedFile;
+    }
   }
   if (!state.media) return null;
 
   const form = new FormData();
   form.append('media', state.media);
-  showProcessing({ title: 'Uploading your media…', message: state.carouselSlides.length ? 'Preparing your carousel slides for publishing.' : 'Preparing your media for publishing.' });
+  showProcessing({ title: 'Uploading your media…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Preparing your carousel slides for publishing.' : 'Preparing your media for publishing.' });
   try {
     const response = await fetch('/api/media/upload', { method: 'POST', body: form });
     const data = await response.json();
@@ -235,6 +259,7 @@ function reset() {
   state.generatedRef = null;
   clearGeneratedMedia();
   state.carouselSlides = [];
+  state.carouselFiles = [];
   state.existingMedia = null;
   state.channels.clear();
   state.platformCaptions = {}; state.platformAltText = {}; state.slideAltText = []; state.contentContext = {};
@@ -267,7 +292,7 @@ mediaDropzone.onclick = event => { if (event.target !== mediaTrigger) mediaInput
 mediaDropzone.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); mediaInput.click(); } };
 ['dragenter','dragover'].forEach(type => mediaDropzone.addEventListener(type, event => { event.preventDefault(); mediaDropzone.classList.add('dragging'); }));
 ['dragleave','drop'].forEach(type => mediaDropzone.addEventListener(type, event => { event.preventDefault(); mediaDropzone.classList.remove('dragging'); }));
-mediaDropzone.addEventListener('drop', event => { const files = event.dataTransfer?.files; if (!files?.length) return; const transfer = new DataTransfer(); transfer.items.add(files[0]); mediaInput.files = transfer.files; mediaInput.dispatchEvent(new Event('change')); });
+mediaDropzone.addEventListener('drop', event => { const files = event.dataTransfer?.files; if (!files?.length) return; const transfer = new DataTransfer(); [...files].forEach(file => transfer.items.add(file)); mediaInput.files = transfer.files; mediaInput.dispatchEvent(new Event('change')); });
 q('publishing-retry-channels').onclick = loadChannels;
 modeSelect.onchange = syncModeControl;
 document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
@@ -278,14 +303,26 @@ document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
 });
 
 mediaInput.onchange = async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  if (!supportedManualMedia.has(file.type)) { out.textContent = 'Use PNG, JPG, WebP, MP4, MOV, or WebM media.'; mediaInput.value = ''; return; }
+  const files = [...(event.target.files || [])];
+  if (!files.length) return;
+  if (files.length > 10 || files.some(file => !supportedManualMedia.has(file.type))) { out.textContent = 'Choose up to 10 PNG, JPG, WebP, MP4, MOV, or WebM files.'; mediaInput.value = ''; return; }
+  if (files.length > 1 && files.some(file => !file.type.startsWith('image/'))) { out.textContent = 'A carousel can contain only PNG, JPG, or WebP images. Upload video by itself.'; mediaInput.value = ''; return; }
+  if (files.length > 1) {
+    state.media = null; state.uploaded = null; state.generatedRef = null; clearGeneratedMedia();
+    state.carouselSlides = []; state.carouselFiles = files; state.carouselIndex = 0; state.existingMedia = null;
+    state.contentContext = {}; state.slideAltText = files.map(() => ''); state.platformAltText = {}; altText.value = '';
+    setMediaState('manual-carousel'); renderPublishingCarousel(); renderCopyWorkspaces();
+    try { state.mediaRef = await savePublishingMedia(files); savePublishingDraft(); }
+    catch (error) { out.textContent = 'Carousel loaded, but reload recovery failed: ' + error.message; }
+    return;
+  }
+  const [file] = files;
   state.media = file;
   state.uploaded = null;
   state.generatedRef = null;
   clearGeneratedMedia();
   state.carouselSlides = [];
+  state.carouselFiles = [];
   state.existingMedia = null;
   state.contentContext = {}; state.slideAltText = []; state.platformAltText = {}; altText.value = '';
   setMediaState('manual');
@@ -322,12 +359,12 @@ button.onclick = async () => {
   if (!confirm(confirmation)) return;
 
   state.busy = true;
-  showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: state.carouselSlides.length ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
+  showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
   button.disabled = true;
   button.textContent = schedule ? 'Scheduling...' : 'Publishing...';
   try {
     const media = await uploadOnce();
-    showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: state.carouselSlides.length ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
+    showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
     const response = await fetch('/api/publishing/posts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -371,6 +408,7 @@ document.addEventListener('publishing:generated', async (event) => {
   state.contentContext = { ...state.contentContext, source: result.source || 'unknown', contentType: result.contentType || result.contentFormat || 'single-image', itemId: result.itemId || result.id || null, resultRef: result.resultRef || '' };
   clearGeneratedMedia();
   state.carouselSlides = [];
+  state.carouselFiles = [];
   state.existingMedia = null;
   mediaInput.value = '';
   altText.value = ''; state.platformAltText = {}; state.platformCaptions = {};
@@ -378,6 +416,13 @@ document.addEventListener('publishing:generated', async (event) => {
   state.contentContext = { ...state.contentContext, headline: result.headline || '', supportingCopy: result.supportingCopy || '', cta: result.cta || '', carousel: result.carousel || null, brand: { name: brand.name || 'Upplai', aiInstruction: brand.aiInstruction || '' } };
   state.slideAltText = Array.isArray(result.carousel?.slides) ? result.carousel.slides.map(() => '') : [];
 
+  if (result.preparedFullArtwork) {
+    state.media = await preparedArtworkFile(result.preparedFullArtwork);
+    state.mediaRef = await savePublishingMedia(state.media, `publishing-generated:${state.generatedRef}`);
+    prepareGeneratedMediaPreview();
+    setMediaState('generated-direct');
+    out.textContent = 'Generated Full AI artwork ready for publishing.';
+  } else {
   const asset = await loadCalendarAsset(result.resultRef);
   if (!asset) throw new Error('Generated design could not be loaded. Return to Design Review and regenerate it.');
   {
@@ -385,7 +430,20 @@ document.addEventListener('publishing:generated', async (event) => {
     template.innerHTML = ['carousel', 'multi-page'].includes(asset.type) ? asset.slides?.[0]?.html || '' : asset.html;
     state.generatedPreview = template.content.firstElementChild;
     if (!state.generatedPreview) throw new Error('Generated design could not be loaded. Return to Design Review and regenerate it.');
-    if (['carousel', 'multi-page'].includes(asset.type)) { state.carouselSlides = (asset.slides || []).map(slide => { const node = document.createElement('template'); node.innerHTML = slide.html; return node.content.firstElementChild; }); if (!state.carouselSlides.length || state.carouselSlides.some(slide => !slide)) throw new Error('Generated carousel could not be loaded. Return to Carousel and try again.'); state.carouselIndex = 0; renderPublishingCarousel(); } else prepareGeneratedMediaPreview(); setMediaState('generated'); out.textContent = asset.type === 'carousel' ? 'Carousel loaded with all slides. Publishing will upload them in this order when you confirm.' : asset.type === 'multi-page' ? 'Multi-page design loaded with all pages. Publishing will upload them in this order when you confirm.' : 'Generated design ready for publishing.';
+    if (['carousel', 'multi-page'].includes(asset.type)) {
+      state.carouselSlides = (asset.slides || []).map(slide => { const node = document.createElement('template'); node.innerHTML = slide.html; return node.content.firstElementChild; });
+      if (!state.carouselSlides.length || state.carouselSlides.some(slide => !slide)) throw new Error('Generated carousel could not be loaded. Return to Carousel and try again.');
+      state.carouselFiles = await Promise.all(state.carouselSlides.map(async (slide, index) => new File([await previewPngBlob(slide)], `generated-slide-${index + 1}.png`, { type: 'image/png' })));
+      state.mediaRef = await savePublishingMedia(state.carouselFiles, `publishing-generated:${state.generatedRef}`);
+      state.carouselIndex = 0; renderPublishingCarousel();
+    } else {
+      state.generatedFile = new File([await previewPngBlob(state.generatedPreview)], 'generated-design.png', { type: 'image/png' });
+      state.media = state.generatedFile;
+      state.mediaRef = await savePublishingMedia(state.media, `publishing-generated:${state.generatedRef}`);
+      prepareGeneratedMediaPreview();
+    }
+    setMediaState('generated'); out.textContent = asset.type === 'carousel' ? 'Carousel loaded with all slides. Publishing will upload them in this order when you confirm.' : asset.type === 'multi-page' ? 'Multi-page design loaded with all pages. Publishing will upload them in this order when you confirm.' : 'Generated design ready for publishing.';
+  }
   }
   renderCopyWorkspaces();
   savePublishingDraft(); showPublishingTab('composer');
@@ -485,14 +543,32 @@ if (managementStatusName !== 'composer') showPublishingTab(managementStatusName)
 // Rehydrate media without replaying the handoff (which would overwrite edited copy).
 async function restorePublishingMedia() {
   try {
-    if (state.mediaSource === 'generated' && state.generatedRef) {
+    if (state.mediaSource === 'generated-direct' && state.mediaRef) {
+      const savedMedia = await loadCalendarAsset(state.mediaRef);
+      if (!savedMedia?.file) throw new Error('Saved Full AI artwork is unavailable. Send it to Publishing again.');
+      state.media = savedMedia.file; prepareGeneratedMediaPreview(); setMediaState('generated-direct');
+    } else if (state.mediaSource === 'generated' && state.generatedRef) {
       const asset = await loadCalendarAsset(state.generatedRef);
       if (!asset) throw new Error('Saved design is unavailable. Send it to Publishing again.');
       const node = html => { const template = document.createElement('template'); template.innerHTML = html || ''; return template.content.firstElementChild; };
       state.carouselSlides = ['carousel','multi-page'].includes(asset.type) ? asset.slides.map(slide => node(slide.html)) : [];
       state.generatedPreview = state.carouselSlides[0] || node(asset.html);
-      if (state.carouselSlides.length) renderPublishingCarousel(); else prepareGeneratedMediaPreview();
+      const savedMedia = state.mediaRef ? await loadCalendarAsset(state.mediaRef) : null;
+      if (state.carouselSlides.length) {
+        state.carouselFiles = Array.isArray(savedMedia?.file) ? savedMedia.file : [];
+        if (!state.carouselFiles.length) throw new Error('Saved publishing media is unavailable. Send the latest design to Publishing again.');
+        renderPublishingCarousel();
+      } else {
+        if (!savedMedia?.file) throw new Error('Saved publishing media is unavailable. Send the latest design to Publishing again.');
+        state.media = savedMedia.file; prepareGeneratedMediaPreview();
+      }
       setMediaState('generated');
+    } else if (state.mediaSource === 'manual-carousel' && state.mediaRef) {
+      const asset = await loadCalendarAsset(state.mediaRef);
+      if (!Array.isArray(asset?.file) || asset.file.length < 2) throw new Error('Saved carousel upload is unavailable. Please attach it again.');
+      state.media = null; state.carouselSlides = []; state.carouselFiles = asset.file; state.carouselIndex = 0;
+      if (state.slideAltText.length !== state.carouselFiles.length) state.slideAltText = state.carouselFiles.map(() => '');
+      renderPublishingCarousel(); setMediaState('manual-carousel');
     } else if (state.mediaSource === 'manual' && state.mediaRef) {
       const asset = await loadCalendarAsset(state.mediaRef);
       if (!asset?.file) throw new Error('Saved upload is unavailable. Please attach it again.');

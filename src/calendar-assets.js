@@ -74,8 +74,8 @@ export async function loadCarouselVisualAsset(id) {
 }
 
 // Blob persistence shares the existing asset database; localStorage stores only its key.
-export async function savePublishingMedia(file) {
-  const id = 'publishing-current-media';
+export async function savePublishingMedia(file, id = 'publishing-current-media') {
+  if (!file || !id) throw new Error('Publishing media is unavailable for recovery.');
   await transact('readwrite', store => store.put({ id, type: 'publishing-media', file }));
   return id;
 }

@@ -4,21 +4,30 @@ import { readFile } from 'node:fs/promises';
 
 const file = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('single-design handoff persists the current preview and declares its identity', async () => {
+test('single-design handoff keeps DOM persistence for native and AI Visual designs while Full AI sends its prepared PNG directly', async () => {
   const app = await file('public/app.js');
   assert.match(app, /await saveCalendarAsset\(resultRef, \{\s*preview: preview\.cloneNode\(true\)/s);
+  assert.match(app, /const isPreparedFullArtwork = value\.aiRenderMode === 'full-ai-artwork' && aiDesign\?\.fullArtwork === true/);
+  assert.match(app, /preparedFullArtwork: isPreparedFullArtwork \? aiDesign\.image : ''/);
   assert.match(app, /source: preview\.dataset\.editSource \|\| 'create'/);
   assert.match(app, /contentType: 'single-image'/);
   assert.match(app, /finally \{\s*sendToPublish\.disabled = false/s);
 });
 
-test('Publishing renders stored generated HTML before any explicit media upload', async () => {
+test('Publishing persists the current generated PNG before navigation and recovers that exact media', async () => {
   const publishing = await file('public/publishing.js');
   const receiver = publishing.slice(publishing.indexOf("document.addEventListener('publishing:generated'"));
-  assert.match(publishing, /const visiblePreview = state\.generatedPreview\.cloneNode\(true\)/);
-  assert.match(publishing, /q\('publishing-media'\)\.replaceChildren\(visiblePreview\)/);
-  assert.doesNotMatch(receiver, /await prepareGeneratedMediaPreview\(\)/);
-  assert.match(publishing, /const blob = await previewPngBlob\(state\.generatedPreview\)/);
+  assert.match(receiver, /new File\(\[await previewPngBlob\(state\.generatedPreview\)\], 'generated-design\.png'/);
+  assert.match(receiver, /await savePublishingMedia\(state\.media, `publishing-generated:\$\{state\.generatedRef\}`\)/);
+  assert.match(publishing, /const savedMedia = state\.mediaRef \? await loadCalendarAsset\(state\.mediaRef\) : null/);
+  assert.match(publishing, /state\.media = savedMedia\.file; prepareGeneratedMediaPreview\(\)/);
+  assert.match(publishing, /state\.carouselFiles = await Promise\.all/);
+  assert.match(receiver, /if \(result\.preparedFullArtwork\)/);
+  assert.match(receiver, /state\.media = await preparedArtworkFile\(result\.preparedFullArtwork\)/);
+  assert.match(receiver, /await savePublishingMedia\(state\.media, `publishing-generated:\$\{state\.generatedRef\}`\)/);
+  assert.doesNotMatch(receiver.slice(receiver.indexOf('if (result.preparedFullArtwork)'), receiver.indexOf('} else {')), /previewPngBlob/);
+  assert.match(publishing, /state\.mediaSource === 'generated-direct' && state\.mediaRef/);
+  assert.match(receiver, /state\.carouselFiles = \[\];/);
 });
 
 test('multi-page, carousel, Calendar, and Review handoffs retain stored result references', async () => {

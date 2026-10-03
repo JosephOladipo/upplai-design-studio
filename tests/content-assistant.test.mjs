@@ -41,6 +41,7 @@ test('live caption requests send attached media as vision input and retain struc
   assert.equal(request.input[0].content[1].type, 'input_image');
   assert.match(request.input[0].content[0].text, /Interview preparation/);
   assert.match(request.instructions, /primary source of truth/);
+  assert.deepEqual(request.text, { format: { type: 'json_object' } });
 });
 
 test('video-frame analysis states its real limitation in the request', async () => {
@@ -48,6 +49,7 @@ test('video-frame analysis states its real limitation in the request', async () 
   const client = { responses: { create: async value => { request = value; return { output_text: JSON.stringify({ altText: 'A visible video frame.' }) }; } } };
   await generateAltText({ config: { mockMode: false, designModel: 'test' }, client, input: { ...input, media: { kind: 'video-frame', images: ['data:image/jpeg;base64,aGVsbG8='] } } });
   assert.match(request.input[0].content[0].text, /Sampled video frame only/);
+  assert.deepEqual(request.text, { format: { type: 'json_object' } });
 });
 
 test('platform-specific Buffer text maps to its matching channel while legacy text remains compatible', async () => {

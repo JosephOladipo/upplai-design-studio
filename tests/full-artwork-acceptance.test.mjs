@@ -27,6 +27,15 @@ test('explicit custom backgrounds bypass only default-white acceptance', () => {
   assert.equal(result.backgroundAccepted, true);
 });
 
+test('default Full AI accepts a background diagnostic failure when critical typography is safe', async () => {
+  const { client, calls } = clientWith([{ backgroundCanvas: 'fail', typographyWithinSafeFrame: true, criticalTextPresent: true }]);
+  const result = await generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Headline' } });
+  assert.equal(result.artworkAttempts, 1);
+  assert.equal(calls.images.length, 1);
+  assert.equal(result.artworkAcceptance.backgroundDiagnostic, 'fail');
+  assert.equal(result.artworkAcceptance.safeAreaAccepted, true);
+});
+
 test('default Full AI validates the returned PNG and performs one corrective retry', async () => {
   const { client, calls } = clientWith([{ backgroundCanvas: 'fail', typographyWithinSafeFrame: false, criticalTextPresent: true }, { backgroundCanvas: 'pass', typographyWithinSafeFrame: true, criticalTextPresent: true }]);
   const result = await generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Headline' } });
@@ -40,6 +49,13 @@ test('default Full AI validates the returned PNG and performs one corrective ret
 test('Full AI acceptance is bounded to one retry', async () => {
   const { client, calls } = clientWith([{ backgroundCanvas: 'fail', typographyWithinSafeFrame: false, criticalTextPresent: true }, { backgroundCanvas: 'fail', typographyWithinSafeFrame: false, criticalTextPresent: true }]);
   await assert.rejects(() => generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Headline' } }), /after one corrective retry/);
+  assert.equal(calls.images.length, 2);
+  assert.equal(calls.assessments.length, 2);
+});
+
+test('missing critical text remains a hard failure after its corrective retry', async () => {
+  const { client, calls } = clientWith([{ backgroundCanvas: 'pass', typographyWithinSafeFrame: true, criticalTextPresent: false }, { backgroundCanvas: 'pass', typographyWithinSafeFrame: true, criticalTextPresent: false }]);
+  await assert.rejects(() => generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Headline' } }), /critical typography/i);
   assert.equal(calls.images.length, 2);
   assert.equal(calls.assessments.length, 2);
 });

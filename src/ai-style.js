@@ -522,7 +522,9 @@ const scale = (result.fullArtwork ? Math.min : Math.max)(
       canvas.toDataURL('image/png'),
 
     canvas,
-    backgroundCleanup: cleanup
+    backgroundCleanup: cleanup,
+    fullArtwork: result.fullArtwork === true,
+    backgroundPolicy: result.backgroundPolicy || 'auto'
   };
 }
 
@@ -775,6 +777,15 @@ export function applyAIStyle(
 ) {
   const plan =
     validatePlan(design.plan);
+
+  // Full AI default-white output is already a complete flattened composition.
+  // It was deterministically cleaned and composited before reaching this point,
+  // so a browser readability overlay would incorrectly tint its white canvas.
+  if (design.fullArtwork === true && design.backgroundPolicy === 'white') {
+    preview.style.background = `url("${design.image}") center / cover no-repeat`;
+    preview.dataset.readability = 'full-artwork';
+    return '';
+  }
 
   const area =
     aiLayout(plan, value);
