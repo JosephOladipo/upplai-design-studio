@@ -41,6 +41,7 @@ test('live caption requests send attached media as vision input and retain struc
   assert.equal(request.input[0].content[1].type, 'input_image');
   assert.match(request.input[0].content[0].text, /Interview preparation/);
   assert.match(request.instructions, /primary source of truth/);
+  assert.match(request.input[0].content[0].text, /^Return the result as valid JSON only\./);
   assert.deepEqual(request.text, { format: { type: 'json_object' } });
 });
 

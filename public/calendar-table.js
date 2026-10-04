@@ -324,10 +324,10 @@ function rowElement(row) {
   const folderSelect = document.createElement('select'); folderSelect.add(new Option('Unfiled', '')); loadContentLibrary().folders.forEach(folder => folderSelect.add(new Option(folder.name, folder.id))); folderSelect.value = row.folderId || ''; folderSelect.onchange = () => { saveCalendar(assignFolder(rows(), row.id, folderSelect.value)); render(); }; items.append(folderSelect);
   items.append(menuItem(row.archived ? 'Restore' : 'Archive', () => { saveCalendar(setArchived(rows(), row.id, !row.archived)); render(); }));
 
-  if (['ready', 'stale'].includes(value)) {
+  if (['ready', 'stale', 'failed'].includes(value)) {
     items.append(
       menuItem(
-        value === 'stale'
+        value === 'stale' || value === 'failed'
           ? 'Regenerate'
           : 'Generate',
         () =>

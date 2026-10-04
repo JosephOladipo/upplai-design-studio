@@ -149,7 +149,7 @@ test('calendar persistence restores and clearing only removes calendar storage',
   assert.equal(loadCalendar(store), null); assert.equal(store.getItem('upplai-design-studio:form:v1'), 'unchanged');
 });
 
-test('selection helpers preserve order and only select eligible statuses', () => {
+test('selection helpers preserve order and include failed rows for retry', () => {
   const rows = [
     { id: 'second', order: 2, date: '2026-09-20', status: 'generated' },
     { id: 'first', order: 1, date: '2026-09-20', status: 'ready' },
@@ -160,9 +160,9 @@ test('selection helpers preserve order and only select eligible statuses', () =>
   ];
   assert.deepEqual([...selectAllRows(rows)], ['first', 'second', 'third', 'fourth', 'fifth', 'sixth']);
   assert.deepEqual([...selectTodayRows(rows, '2026-09-20')], ['first', 'second', 'fourth', 'fifth', 'sixth']);
-  assert.deepEqual([...selectUngeneratedRows(rows)], ['first', 'third']);
+  assert.deepEqual([...selectUngeneratedRows(rows)], ['first', 'third', 'fifth']);
   assert.deepEqual(getSelectedRowsInOrder(rows, new Set(['third', 'first'])).map(row => row.id), ['first', 'third']);
-  assert.deepEqual(getTodayEligibleRows(rows, '2026-09-20').map(row => row.id), ['first']);
+  assert.deepEqual(getTodayEligibleRows(rows, '2026-09-20').map(row => row.id), ['first', 'fifth']);
   assert.equal(calendarSummary(rows, new Set(['first', 'third']), '2026-09-20').selected, 2);
   assert.equal(calendarSummary(rows, new Set(), '2026-09-20').byStatus.generated, 1);
 });

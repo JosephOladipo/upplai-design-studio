@@ -1,7 +1,9 @@
 import { calendarRowToDesignInput } from './design-controller.js';
 import { normalizeStatus, rowsInOrder } from './calendar.js';
 
-const eligible = new Set(['ready', 'stale']);
+// A failed attempt is retryable.  It has no usable asset and must not leave a
+// Calendar row permanently stranded after a transient generation failure.
+const eligible = new Set(['ready', 'stale', 'failed']);
 export const calendarSingleImageInput = row => calendarRowToDesignInput(row);
 const replace = (rows, row) => rows.map(item => item.id === row.id ? row : item);
 const compactError = error => String(error?.message || error || 'Generation failed.').replace(/\s+/g, ' ').slice(0, 180);

@@ -8,20 +8,23 @@ function imageResult(data) {
   return { image: 'data:image/png;base64,' + data };
 }
 
-const correctiveInstruction = (assessment, backgroundPolicy) => `CORRECTIVE REGENERATION: The prior artwork was rejected. ${assessment.reason} Keep the supplied copy exact. Render all critical typography comfortably inside the safe frame, with clear space above the headline and below the CTA. ${backgroundPolicy === 'white' ? 'For the default background, output only intentional artwork on transparent pixels; do not paint a backdrop, gray wash, gradient, vignette, haze, or canvas lighting.' : 'Preserve the explicitly requested background while correcting typography placement.'}`;
-async function acceptFullArtwork({ client, config, image, backgroundPolicy, regenerate }) {
+const essentialHeadline = copy => String(copy?.headline || '').trim().slice(0, 300);
+const correctiveInstruction = (assessment, backgroundPolicy, copy) => `CORRECTIVE REGENERATION: The prior artwork was rejected. ${assessment.reason} Keep the essential headline exact: ${JSON.stringify(essentialHeadline(copy))}. Render that headline comfortably inside the safe frame, with clear margins on every side. Supporting copy and CTA are optional: omit them rather than making them tiny, clipped, or crowded. ${backgroundPolicy === 'white' ? 'For the default background, output only intentional artwork on transparent pixels; do not paint a backdrop, gray wash, gradient, vignette, haze, or canvas lighting.' : 'Preserve the explicitly requested background while correcting typography placement.'}`;
+async function acceptFullArtwork({ client, config, image, backgroundPolicy, copy, regenerate }) {
   let candidate = image;
-  let assessment = await assessFullArtwork({ client, config, image: candidate, backgroundPolicy });
+  let assessment = await assessFullArtwork({ client, config, image: candidate, backgroundPolicy, copy });
   if (assessment.accepted) return { image: candidate, assessment, attempts: 1 };
-  candidate = await regenerate(correctiveInstruction(assessment, backgroundPolicy));
-  assessment = await assessFullArtwork({ client, config, image: candidate, backgroundPolicy });
-  if (!assessment.accepted) throw new Error(`Full AI artwork could not meet the required background and text-safe-area checks after one corrective retry. ${assessment.reason}`);
-  return { image: candidate, assessment, attempts: 2 };
+  candidate = await regenerate(correctiveInstruction(assessment, backgroundPolicy, copy));
+  assessment = await assessFullArtwork({ client, config, image: candidate, backgroundPolicy, copy });
+  // The second image is still a valid image-generation result. Vision is used to
+  // improve typography, not to turn an otherwise usable generated PNG into a
+  // failed Calendar/Create operation when its assessment remains uncertain.
+  return { image: candidate, assessment, attempts: 2, validatorFallback: !assessment.accepted };
 }
 
 export async function generateVisual({ config, plan, quality, client, fullArtwork = false, copy = {}, brandInstruction = '' }) {
   const prompt = fullArtwork
-    ? [plan.imagePrompt, brandInstruction ? `MANDATORY BRAND INSTRUCTION — FOLLOW DIRECTLY:\n${brandInstruction}` : '', 'Create a complete flattened 4:5 social-media artwork. Render the supplied post copy as part of the artwork when legible; this output is intentionally not natively editable.', artworkInstructions(copy.customDirection), `Headline: ${copy.headline || ''}`, `Supporting copy: ${copy.supportingCopy || ''}`, `CTA: ${copy.cta || ''}`].join('\n')
+    ? [plan.imagePrompt, brandInstruction ? `MANDATORY BRAND INSTRUCTION — FOLLOW DIRECTLY:\n${brandInstruction}` : '', 'Create a complete flattened 4:5 social-media artwork. This output is intentionally not natively editable.', artworkInstructions(copy.customDirection), `ESSENTIAL HEADLINE — render this exact text prominently and wholly inside safe margins: ${copy.headline || ''}`, `OPTIONAL supporting copy — include only when it remains clearly readable and comfortably inside safe margins: ${copy.supportingCopy || ''}`, `OPTIONAL CTA — include only when it remains clearly readable and comfortably inside safe margins: ${copy.cta || ''}`].join('\n')
     : safeImagePrompt(plan);
   const backgroundPolicy = fullArtwork ? artworkBackground(copy.customDirection) : 'auto';
   if (config.mockMode) {
@@ -37,8 +40,8 @@ export async function generateVisual({ config, plan, quality, client, fullArtwor
   };
   const image = await create('');
   if (!fullArtwork) return { image, fullArtwork, backgroundPolicy };
-  const accepted = await acceptFullArtwork({ client, config, image, backgroundPolicy, regenerate: create });
-  return { image: accepted.image, fullArtwork, backgroundPolicy, artworkAcceptance: accepted.assessment, artworkAttempts: accepted.attempts };
+  const accepted = await acceptFullArtwork({ client, config, image, backgroundPolicy, copy, regenerate: create });
+  return { image: accepted.image, fullArtwork, backgroundPolicy, artworkAcceptance: accepted.assessment, artworkAttempts: accepted.attempts, artworkValidatorFallback: accepted.validatorFallback === true };
 }
 
 export async function refineVisual({ config, plan, quality, image, instruction, client, fullArtwork = false, copy = {}, brandInstruction = '' }) {
@@ -58,6 +61,6 @@ export async function refineVisual({ config, plan, quality, image, instruction, 
   };
   const output = await edit(image.file || image.buffer);
   if (!fullArtwork) return { image: output, fullArtwork, backgroundPolicy };
-  const accepted = await acceptFullArtwork({ client, config, image: output, backgroundPolicy, regenerate: extra => edit(Buffer.from(output.replace(/^data:image\/png;base64,/, ''), 'base64'), extra) });
-  return { image: accepted.image, fullArtwork, backgroundPolicy, artworkAcceptance: accepted.assessment, artworkAttempts: accepted.attempts };
+  const accepted = await acceptFullArtwork({ client, config, image: output, backgroundPolicy, copy, regenerate: extra => edit(Buffer.from(output.replace(/^data:image\/png;base64,/, ''), 'base64'), extra) });
+  return { image: accepted.image, fullArtwork, backgroundPolicy, artworkAcceptance: accepted.assessment, artworkAttempts: accepted.attempts, artworkValidatorFallback: accepted.validatorFallback === true };
 }

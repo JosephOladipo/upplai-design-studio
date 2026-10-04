@@ -17,16 +17,17 @@ export function normalizeArtworkAssessment(value, backgroundPolicy) {
   return { accepted: Boolean(safe), backgroundAccepted: Boolean(background), backgroundDiagnostic: value?.backgroundCanvas === 'pass' ? 'pass' : value?.backgroundCanvas === 'fail' ? 'fail' : 'unknown', safeAreaAccepted: Boolean(safe), reason: !safe ? 'Critical typography is outside the required safe frame or missing.' : '' };
 }
 
-export async function assessFullArtwork({ client, config, image, backgroundPolicy }) {
+export async function assessFullArtwork({ client, config, image, backgroundPolicy, copy = {} }) {
   const { width, height } = pngDimensions(image);
   const frame = proportionalSafeFrame(width, height);
+  const headline = String(copy.headline || '').trim().slice(0, 300);
   const backgroundInstruction = backgroundPolicy === 'white'
     ? 'Return pass for backgroundCanvas only when the default exposed canvas is pure white or transparent with no large gray/colored backdrop, gradient, vignette, haze, or environmental wash. Local object shadows are allowed.'
     : 'The user explicitly requested a custom background; do not reject that background.';
   const response = await client.responses.create({
     model: config.designModel, store: false, max_output_tokens: 300,
     text: { format: { type: 'json_schema', name: 'full_artwork_acceptance', strict: true, schema: { type: 'object', additionalProperties: false, properties: { backgroundCanvas: { type: 'string', enum: ['pass', 'fail'] }, typographyWithinSafeFrame: { type: 'boolean' }, criticalTextPresent: { type: 'boolean' } }, required: ['backgroundCanvas', 'typographyWithinSafeFrame', 'criticalTextPresent'] } } },
-    instructions: `Inspect this generated Full AI social artwork. The supplied post copy is critical typography. ${backgroundInstruction} Typography must stay within this image's safe frame: top ${frame.top}px, bottom ${frame.bottom}px, left ${frame.left}px, right ${frame.right}px. Mark typographyWithinSafeFrame false if any headline, supporting copy, or CTA visibly breaches it.`,
+    instructions: `Inspect this generated Full AI social artwork. ${headline ? `The essential headline is ${JSON.stringify(headline)}. Assess criticalTextPresent and typographyWithinSafeFrame only for that exact essential headline.` : 'No essential headline was supplied; do not reject the artwork for missing optional typography.'} ${backgroundInstruction} The essential headline must stay within this image's safe frame: top ${frame.top}px, bottom ${frame.bottom}px, left ${frame.left}px, right ${frame.right}px. Supporting copy and CTA are optional. Do not mark either typography field false because optional copy or a CTA is absent, uncertain, small, decorative, or outside the frame. Mark typographyWithinSafeFrame false only when the essential headline itself visibly breaches the frame.`,
     input: [{ role: 'user', content: [{ type: 'input_image', image_url: image, detail: 'high' }] }]
   });
   let parsed;

@@ -43,21 +43,45 @@ test('default Full AI validates the returned PNG and performs one corrective ret
   assert.equal(calls.images.length, 2);
   assert.equal(calls.assessments.length, 2);
   assert.match(calls.images[1].prompt, /CORRECTIVE REGENERATION/);
+  assert.match(calls.images[0].prompt, /ESSENTIAL HEADLINE/);
+  assert.match(calls.assessments[0].instructions, /Supporting copy and CTA are optional/);
   assert.equal(calls.images[0].background, 'transparent');
 });
 
-test('Full AI acceptance is bounded to one retry', async () => {
+test('Full AI keeps the essential headline gate while excluding optional copy from the vision gate', async () => {
+  const { client, calls } = clientWith([{ backgroundCanvas: 'pass', typographyWithinSafeFrame: false, criticalTextPresent: true }, { backgroundCanvas: 'pass', typographyWithinSafeFrame: true, criticalTextPresent: true }]);
+  const result = await generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Essential message', supportingCopy: 'Optional supporting explanation that may be omitted.', cta: 'Optional CTA' } });
+  assert.equal(result.artworkAttempts, 2);
+  assert.match(calls.assessments[0].instructions, /essential headline is "Essential message"/);
+  assert.match(calls.assessments[0].instructions, /Do not mark either typography field false because optional copy or a CTA is absent/);
+  assert.match(calls.images[1].prompt, /Supporting copy and CTA are optional/);
+});
+
+test('Full AI returns the corrective generated artwork when vision still cannot verify typography', async () => {
   const { client, calls } = clientWith([{ backgroundCanvas: 'fail', typographyWithinSafeFrame: false, criticalTextPresent: true }, { backgroundCanvas: 'fail', typographyWithinSafeFrame: false, criticalTextPresent: true }]);
-  await assert.rejects(() => generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Headline' } }), /after one corrective retry/);
+  const result = await generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Headline' } });
+  assert.match(result.image, /^data:image\/png;base64,/);
+  assert.equal(result.artworkAttempts, 2);
+  assert.equal(result.artworkValidatorFallback, true);
+  assert.equal(result.artworkAcceptance.safeAreaAccepted, false);
   assert.equal(calls.images.length, 2);
   assert.equal(calls.assessments.length, 2);
 });
 
-test('missing critical text remains a hard failure after its corrective retry', async () => {
+test('a missing headline diagnosis after correction is retained as a diagnostic fallback', async () => {
   const { client, calls } = clientWith([{ backgroundCanvas: 'pass', typographyWithinSafeFrame: true, criticalTextPresent: false }, { backgroundCanvas: 'pass', typographyWithinSafeFrame: true, criticalTextPresent: false }]);
-  await assert.rejects(() => generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Headline' } }), /critical typography/i);
+  const result = await generateVisual({ config, plan, quality: 'draft', client, fullArtwork: true, copy: { headline: 'Headline' } });
+  assert.equal(result.artworkValidatorFallback, true);
+  assert.equal(result.artworkAcceptance.safeAreaAccepted, false);
   assert.equal(calls.images.length, 2);
   assert.equal(calls.assessments.length, 2);
+});
+
+test('genuine image API and malformed image failures still reject Full AI generation', async () => {
+  const apiFailure = { images: { generate: async () => { throw new Error('image API unavailable'); } }, responses: { create: async () => assessment({ backgroundCanvas: 'pass', typographyWithinSafeFrame: true, criticalTextPresent: true }) } };
+  await assert.rejects(() => generateVisual({ config, plan, quality: 'draft', client: apiFailure, fullArtwork: true, copy: { headline: 'Headline' } }), /image API unavailable/);
+  const malformed = { images: { generate: async () => ({ data: [{ b64_json: 'not-a-png' }] }) }, responses: { create: async () => assessment({ backgroundCanvas: 'pass', typographyWithinSafeFrame: true, criticalTextPresent: true }) } };
+  await assert.rejects(() => generateVisual({ config, plan, quality: 'draft', client: malformed, fullArtwork: true, copy: { headline: 'Headline' } }), /malformed PNG data/);
 });
 
 test('Calendar single-image normalization retains Full AI mode and prompt for review regeneration', () => {

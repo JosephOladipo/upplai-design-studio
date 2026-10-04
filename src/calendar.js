@@ -302,13 +302,13 @@ export function selectTodayRows(rows, today = localDateKey()) {
 
 export function selectUngeneratedRows(rows) {
   return new Set(rowsInOrder(rows)
-    .filter(row => ['ready', 'stale'].includes(normalizeStatus(row.status)))
+    .filter(row => ['ready', 'stale', 'failed'].includes(normalizeStatus(row.status)))
     .map(row => row.id));
 }
 
 export function getTodayEligibleRows(rows, today = localDateKey()) {
   return rowsInOrder(rows).filter(row =>
-    row.date === today && ['ready', 'stale'].includes(normalizeStatus(row.status)));
+    row.date === today && ['ready', 'stale', 'failed'].includes(normalizeStatus(row.status)));
 }
 
 export function calendarSummary(rows, selectedIds = new Set(), today = localDateKey()) {

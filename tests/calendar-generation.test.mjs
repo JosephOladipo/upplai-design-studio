@@ -40,29 +40,53 @@ test('Calendar queue skips ineligible rows, continues after failure, and blocks 
   assert.equal((await queue.run(rows, new Set(['first']))).blocked, true);
   release();
   const result = await active;
-  assert.deepEqual(calls, ['first', 'second', 'third']);
-  assert.equal(result.summary.generated, 2);
+  assert.deepEqual(calls, ['first', 'second', 'third', 'failed']);
+  assert.equal(result.summary.generated, 3);
   assert.equal(result.summary.failed, 1);
   assert.equal(result.summary.alreadyGenerated, 0);
-  assert.equal(result.summary.skipped, 3);
+  assert.equal(result.summary.skipped, 2);
   assert.equal(result.rows.find(item => item.id === 'second').status, 'failed');
   assert.match(result.rows.find(item => item.id === 'second').error, /useful failure/);
   assert.equal(result.rows.find(item => item.id === 'third').status, 'generated');
   assert.equal(queue.running, false);
 });
 
-test('Today eligibility includes only local ready and stale rows and preserves row order without selection', async () => {
+test('Today eligibility includes retryable failed rows and preserves row order without selection', async () => {
   const today = '2026-09-21';
   const rows = [row('stale', 2, 'stale'), row('generated', 1, 'generated'), row('ready', 0), row('failed', 3, 'failed'), { ...row('future', 4), date: '2026-09-22' }, { ...row('past', 5), date: '2026-09-20' }];
   const ids = todayEligibleIds(rows, today);
-  assert.deepEqual([...ids], ['ready', 'stale']);
+  assert.deepEqual([...ids], ['ready', 'stale', 'failed']);
   const calls = [];
   const queue = createCalendarQueue(async input => { calls.push(input.headline); return { preview: input.headline }; });
   const result = await queue.run(rows, ids);
-  assert.deepEqual(calls, ['ready', 'stale']);
-  assert.equal(result.summary.generated, 2);
+  assert.deepEqual(calls, ['ready', 'stale', 'failed']);
+  assert.equal(result.summary.generated, 3);
   assert.equal(result.rows.find(item => item.id === 'generated').status, 'generated');
   assert.equal(result.results.get('ready').preview, 'ready');
+});
+
+test('a failed Calendar row clears the queue and a later Generate retry invokes a fresh request', async () => {
+  let attempts = 0;
+  const queue = createCalendarQueue(async () => {
+    attempts++;
+    if (attempts === 1) throw new Error('temporary upstream error');
+    return { preview: 'recovered-output' };
+  });
+  const first = await queue.run([row('retryable', 0)], new Set(['retryable']));
+  assert.equal(first.rows[0].status, 'failed');
+  assert.equal(queue.running, false);
+  const second = await queue.run(first.rows, new Set(['retryable']));
+  assert.equal(attempts, 2);
+  assert.equal(second.rows[0].status, 'generated');
+  assert.equal(second.results.get('retryable').preview, 'recovered-output');
+  assert.equal(queue.running, false);
+});
+
+test('a Calendar Full AI result remains generated when only its secondary vision assessment is negative', async () => {
+  const queue = createCalendarQueue(async () => ({ preview: 'valid-image', artworkValidatorFallback: true }));
+  const result = await queue.run([row('vision-diagnostic', 0)], new Set(['vision-diagnostic']));
+  assert.equal(result.rows[0].status, 'generated');
+  assert.equal(result.results.get('vision-diagnostic').artworkValidatorFallback, true);
 });
 
 import { calendarResultRef } from '../src/calendar-assets.js';
