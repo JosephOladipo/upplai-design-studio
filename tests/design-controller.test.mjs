@@ -67,6 +67,7 @@ test('Create can hand an existing rendered preview to the shared Publishing flow
   const html = await import('node:fs/promises').then(fs => fs.readFile(new URL('../public/index.html', import.meta.url), 'utf8'));
   assert.match(html, /id="send-to-publish"/);
   assert.match(source, /saveCalendarAsset\(resultRef/);
-  assert.match(source, /new CustomEvent\('publishing:generated'/);
+  assert.match(source, /await handoffToPublishing\(/);
+  assert.match(source, /status\.textContent = 'Design ready in Publishing\.'/);
   assert.doesNotMatch(source, /generateAI\(.*sendToPublish/);
 });

@@ -402,6 +402,14 @@ test('Local Phase 7 API works entirely in Mock Mode', async () => {
       404
     );
 
+    for (const modulePath of [
+      '/src/publishing-handoff.mjs',
+      '/src/linkedin-carousel-document.mjs'
+    ]) {
+      const response = await fetch(root + modulePath);
+      assert.equal(response.status, 200);
+      assert.match(await response.text(), /export/);
+    }
 
     const invalidPlanResponse =
       await post(

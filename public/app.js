@@ -12,6 +12,7 @@ import { loadCalendar, saveCalendar } from '/src/calendar.js';
 import { generateDesign, normalizeDesignInput } from '/src/design-controller.js';
 import { beginLocalEdits, setupLocalEditor } from '/src/local-editor.js';
 import { showProcessing, hideProcessing } from '/src/processing.js';
+import { handoffToPublishing } from '/src/publishing-handoff.mjs';
 
 applyBrand();
 setupAIControls();
@@ -1086,8 +1087,7 @@ sendToPublish.addEventListener('click', async () => {
       preview: preview.cloneNode(true),
       style: currentStyle
     });
-    document.dispatchEvent(new CustomEvent('publishing:generated', {
-      detail: {
+    await handoffToPublishing({
         resultRef,
         preparedFullArtwork: isPreparedFullArtwork ? aiDesign.image : '',
         source: preview.dataset.editSource || 'create',
@@ -1098,8 +1098,7 @@ sendToPublish.addEventListener('click', async () => {
         supportingCopy: value.supportingCopy,
         cta: value.cta,
         style: currentStyle
-      }
-    }));
+      });
     status.textContent = 'Design ready in Publishing.';
   } catch (error) {
     status.textContent = error.message || 'This design could not be prepared for publishing. Please try again.';
@@ -1149,7 +1148,7 @@ async function refineCurrentAI() {
   const previous = aiDesign;
   aiBusy = true;
   updateControls();
-  showProcessing({ title: 'Refining your visual…', message: 'Applying your instruction to the current AI visual.' });
+  const refiningOperation = showProcessing({ title: 'Refining your visual…', message: 'Applying your instruction to the current AI visual.' });
   try {
     const data = new FormData();
     data.append('planId', aiDesign.planId);
@@ -1166,7 +1165,7 @@ async function refineCurrentAI() {
   } catch (error) {
     aiDesign = previous;
     status.textContent = error.message + ' The current version is unchanged.';
-  } finally { hideProcessing(); aiBusy = false; updateControls(); }
+  } finally { hideProcessing(refiningOperation); aiBusy = false; updateControls(); }
 }
 // Only these two explicit actions can enter the generation pipeline.
 async function generateAI(regenerateOnly = false) {
@@ -1176,7 +1175,7 @@ async function generateAI(regenerateOnly = false) {
   const previous = aiDesign;
   const value = state();
   aiBusy = true;
-  showProcessing({ title: 'Creating your design…', message: 'Generating your visual and preparing the layout.' });
+  const generationOperation = showProcessing({ title: 'Creating your design…', message: 'Generating your visual and preparing the layout.' });
   const disabled = [...form.elements].map(element => [element, element.disabled]);
   for (const [element] of disabled) element.disabled = true;
   regenerate.disabled = download.disabled = another.disabled = true;
@@ -1201,7 +1200,7 @@ async function generateAI(regenerateOnly = false) {
     if (previous) await renderPreview();
     status.textContent = error.message + (previous ? ' Last successful visual preserved.' : ' The other design styles are still available.');
   } finally {
-    hideProcessing();
+    hideProcessing(generationOperation);
     for (const [element, wasDisabled] of disabled) element.disabled = wasDisabled;
     aiBusy = false;
     updateControls();

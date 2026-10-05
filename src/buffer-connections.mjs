@@ -46,7 +46,7 @@ export async function aggregateBufferChannels({ connections = getBufferConnectio
   return { connections: statuses, channels, duplicates };
 }
 
-export async function publishAcrossConnections({ connections = getBufferConnections(), destinations = [], text, channelTexts = {}, tiktokTitle = '', accessibility = {}, mode, dueAt, media, fetcher, mediaVerifier } = {}) {
+export async function publishAcrossConnections({ connections = getBufferConnections(), destinations = [], text, channelTexts = {}, tiktokTitle = '', accessibility = {}, mode, dueAt, media, mediaByDestination = {}, fetcher, mediaVerifier } = {}) {
   const map = new Map(connections.map(connection => [connection.id, connection]));
   const groups = new Map(); const results = [];
   for (const destination of destinations) {
@@ -59,7 +59,8 @@ export async function publishAcrossConnections({ connections = getBufferConnecti
     const perConnectionText = Object.fromEntries(channelIds.map(channelId => [channelId, channelTexts[destinationKey(connectionId, channelId)] || channelTexts[channelId] || text]));
     try {
       const groupAccessibility = { ...accessibility, platformAltText: Object.fromEntries(channelIds.map(channelId => [channelId, accessibility.platformAltText?.[destinationKey(connectionId, channelId)] || accessibility.platformAltText?.[channelId] || ''])) };
-      const groupResults = await publishPosts({ apiKey: connection.apiKey, text, channelTexts: perConnectionText, tiktokTitle, accessibility: groupAccessibility, channelIds, mode, dueAt, media, fetcher, mediaVerifier });
+      const mediaByChannel = Object.fromEntries(channelIds.map(channelId => [channelId, mediaByDestination[destinationKey(connectionId, channelId)] || mediaByDestination[channelId]]).filter(([, value]) => value));
+      const groupResults = await publishPosts({ apiKey: connection.apiKey, text, channelTexts: perConnectionText, tiktokTitle, accessibility: groupAccessibility, channelIds, mode, dueAt, media, mediaByChannel, fetcher, mediaVerifier });
       results.push(...groupResults.map(result => ({ ...result, connectionId, connectionName: connection.name })));
     } catch (error) { results.push(...channelIds.map(channelId => ({ connectionId, connectionName: connection.name, channelId, success: false, error: error?.message || 'Buffer connection failed.' }))); }
   }

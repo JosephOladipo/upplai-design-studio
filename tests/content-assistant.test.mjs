@@ -45,11 +45,14 @@ test('live caption requests send attached media as vision input and retain struc
   assert.deepEqual(request.text, { format: { type: 'json_object' } });
 });
 
-test('video-frame analysis states its real limitation in the request', async () => {
+test('chronological video-frame analysis sends all sampled frames in one grounded request', async () => {
   let request;
   const client = { responses: { create: async value => { request = value; return { output_text: JSON.stringify({ altText: 'A visible video frame.' }) }; } } };
-  await generateAltText({ config: { mockMode: false, designModel: 'test' }, client, input: { ...input, media: { kind: 'video-frame', images: ['data:image/jpeg;base64,aGVsbG8='] } } });
-  assert.match(request.input[0].content[0].text, /Sampled video frame only/);
+  await generateAltText({ config: { mockMode: false, designModel: 'test' }, client, input: { ...input, media: { kind: 'video-frames', images: ['data:image/jpeg;base64,aGVsbG8=', 'data:image/jpeg;base64,aGVsbG8=', 'data:image/jpeg;base64,aGVsbG8='] } } });
+  assert.match(request.input[0].content[0].text, /Chronological representative frames from the same video/);
+  assert.equal(request.input[0].content.filter(item => item.type === 'input_image').length, 3);
+  assert.match(request.instructions, /analyze them together as one video/);
+  assert.match(request.instructions, /do not claim to have watched the full video, heard audio, know a transcript/);
   assert.deepEqual(request.text, { format: { type: 'json_object' } });
 });
 

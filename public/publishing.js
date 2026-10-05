@@ -2,8 +2,10 @@ import { attachedMediaInput } from './publishing-vision.js';
 import { loadCalendarAsset, savePublishingMedia } from '/src/calendar-assets.js';
 import { previewPngBlob } from '/src/export.js';
 import { brand } from '/src/brand.js';
-import { showProcessing, hideProcessing } from '/src/processing.js';
+import { showProcessing, updateProcessing, hideProcessing } from '/src/processing.js';
 import { loadSavedCaptionPrompts, saveCaptionPrompt, renameCaptionPrompt, duplicateCaptionPrompt, deleteCaptionPrompt } from '/src/saved-caption-prompts.js';
+import { classifyManualMedia } from '/src/publishing-media-selection.js';
+import { carouselPdfFile, documentTitle as linkedinDocumentTitle } from '/src/linkedin-carousel-document.mjs';
 
 const state = {
   media: null,
@@ -26,10 +28,13 @@ const state = {
   altTextMode: 'generic',
   platformAltText: {},
   slideAltText: [],
+  linkedinDocument: null,
+  linkedinDocumentTitle: '',
   contentContext: {},
   busy: false
 };
 let managementStatusName = 'composer';
+let mediaLifecycleVersion = 0;
 
 const q = (id) => document.getElementById(id);
 const caption = q('publishing-caption');
@@ -44,8 +49,8 @@ const altText = q('publishing-alt-text');
 const supportedManualMedia = new Set(['image/png','image/jpeg','image/webp','video/mp4','video/quicktime','video/webm']);
 const bytesLabel = bytes => `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`;
 const PUBLISHING_RECOVERY_KEY = 'upplai-design-studio-publishing-draft';
-function savePublishingDraft() { try { localStorage.setItem(PUBLISHING_RECOVERY_KEY, JSON.stringify({ caption: caption.value, instruction: q('publishing-ai-instruction').value, altText: altText.value, captionMode: state.captionMode, altTextMode: state.altTextMode, mode: modeSelect.value, date: q('publishing-date').value, time: q('publishing-time').value, channels: [...state.channels], tab: managementStatusName || 'composer', generatedRef: state.generatedRef || '', mediaRef: state.mediaRef || '', mediaSource: state.mediaSource, existingMedia: state.existingMedia, contentContext: state.contentContext, platformCaptions: state.platformCaptions, platformAltText: state.platformAltText, slideAltText: state.slideAltText })); } catch { /* files and media are intentionally excluded */ } }
-function restorePublishingDraft() { try { const saved = JSON.parse(localStorage.getItem(PUBLISHING_RECOVERY_KEY)); if (!saved || typeof saved !== 'object') return; caption.value = String(saved.caption || ''); q('publishing-ai-instruction').value = String(saved.instruction || ''); altText.value = String(saved.altText || ''); state.captionMode = saved.captionMode === 'platform' ? 'platform' : 'generic'; state.altTextMode = saved.altTextMode === 'platform' ? 'platform' : 'generic'; modeSelect.value = saved.mode === 'schedule' ? 'schedule' : 'now'; q('publishing-date').value = String(saved.date || ''); q('publishing-time').value = String(saved.time || ''); (saved.channels || []).forEach(id => state.channels.add(id)); state.generatedRef = String(saved.generatedRef || '') || null; state.mediaRef = saved.mediaRef || ''; state.mediaSource = saved.mediaSource || (state.generatedRef ? 'generated' : 'none'); state.existingMedia = saved.existingMedia || null; state.contentContext = saved.contentContext || {}; state.platformCaptions = saved.platformCaptions || {}; state.platformAltText = saved.platformAltText || {}; state.slideAltText = saved.slideAltText || []; managementStatusName = ['scheduled','sent'].includes(saved.tab) ? saved.tab : 'composer'; } catch { /* invalid recovery data is ignored */ } }
+function savePublishingDraft() { try { localStorage.setItem(PUBLISHING_RECOVERY_KEY, JSON.stringify({ caption: caption.value, instruction: q('publishing-ai-instruction').value, altText: altText.value, captionMode: state.captionMode, altTextMode: state.altTextMode, mode: modeSelect.value, date: q('publishing-date').value, time: q('publishing-time').value, channels: [...state.channels], tab: managementStatusName || 'composer', generatedRef: state.generatedRef || '', mediaRef: state.mediaRef || '', mediaSource: state.mediaSource, existingMedia: state.existingMedia, contentContext: state.contentContext, platformCaptions: state.platformCaptions, platformAltText: state.platformAltText, slideAltText: state.slideAltText, linkedinDocumentTitle: state.linkedinDocumentTitle })); } catch { /* files and media are intentionally excluded */ } }
+function restorePublishingDraft() { try { const saved = JSON.parse(localStorage.getItem(PUBLISHING_RECOVERY_KEY)); if (!saved || typeof saved !== 'object') return; caption.value = String(saved.caption || ''); q('publishing-ai-instruction').value = String(saved.instruction || ''); altText.value = String(saved.altText || ''); state.captionMode = saved.captionMode === 'platform' ? 'platform' : 'generic'; state.altTextMode = saved.altTextMode === 'platform' ? 'platform' : 'generic'; modeSelect.value = saved.mode === 'schedule' ? 'schedule' : 'now'; q('publishing-date').value = String(saved.date || ''); q('publishing-time').value = String(saved.time || ''); (saved.channels || []).forEach(id => state.channels.add(id)); state.generatedRef = String(saved.generatedRef || '') || null; state.mediaRef = saved.mediaRef || ''; state.mediaSource = saved.mediaSource || (state.generatedRef ? 'generated' : 'none'); state.existingMedia = saved.existingMedia || null; state.contentContext = saved.contentContext || {}; state.platformCaptions = saved.platformCaptions || {}; state.platformAltText = saved.platformAltText || {}; state.slideAltText = saved.slideAltText || []; state.linkedinDocumentTitle = String(saved.linkedinDocumentTitle || ''); managementStatusName = ['scheduled','sent'].includes(saved.tab) ? saved.tab : 'composer'; } catch { /* invalid recovery data is ignored */ } }
 
 q('publishing-timezone').textContent = `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
 restorePublishingDraft();
@@ -58,6 +63,13 @@ function channelLabel(channel) {
 
 function channelKey(channel) { return String(channel.connectionId || 'legacy') + ':' + String(channel.id || ''); }
 function selectedPlatforms() { return [...state.channels].map(id => ({ key: id, ...(state.channelData.get(id) || {}) })).filter(channel => channel.id); }
+function beginMediaLifecycle() { mediaLifecycleVersion += 1; return mediaLifecycleVersion; }
+function validImageFile(file) { return file instanceof Blob && file.size > 0 && /^image\/(png|jpeg|webp)$/i.test(file.type); }
+function validPublishingMedia(value) { return Array.isArray(value) ? value.length > 1 && value.every(validImageFile) : validImageFile(value); }
+function mediaLog(label, reference, value) { const files = Array.isArray(value) ? value : [value]; console.info(label, { reference: reference || '', fileType: files.map(file => file?.type || '').join(','), fileSize: files.map(file => Number(file?.size || 0)).join(',') }); }
+function invalidateLinkedinDocument() { state.linkedinDocument = null; }
+function isCarousel() { return Boolean(state.carouselFiles.length || state.carouselSlides.length); }
+function renderLinkedinDocumentControl() { const host = q('publishing-linkedin-document'); if (!host) return; const linkedIn = isCarousel() && selectedPlatforms().some(channel => channel.service === 'linkedin'); host.hidden = !linkedIn; if (!linkedIn) return; const input = q('publishing-linkedin-document-title'); const derived = state.contentContext.headline || caption.value.split(/\r?\n/).find(line => line.trim()) || 'Upplai Carousel'; if (!state.linkedinDocumentTitle) state.linkedinDocumentTitle = linkedinDocumentTitle(derived); input.value = state.linkedinDocumentTitle; }
 function renderCaptionPrompts(selectedId = '') { const select = q('caption-prompt-select'); if (!select) return; const prompts = loadSavedCaptionPrompts(); select.replaceChildren(new Option('Select Saved Prompt', ''), ...prompts.map(item => new Option(item.name, item.id))); select.value = selectedId; }
 function selectedCaptionPrompt() { const id = q('caption-prompt-select')?.value; return loadSavedCaptionPrompts().find(item => item.id === id) || null; }
 function manageCaptionPrompt(action) { const instruction = q('publishing-ai-instruction'); const current = selectedCaptionPrompt(); try { if (action === 'save') { const name = prompt('Saved caption prompt name:'); if (!name) return; const item = saveCaptionPrompt(name, instruction.value); renderCaptionPrompts(item.id); } if (action === 'rename') { if (!current) return; const name = prompt('Rename saved caption prompt:', current.name); if (!name) return; renameCaptionPrompt(current.id, name); renderCaptionPrompts(current.id); } if (action === 'duplicate') { if (!current) return; const item = duplicateCaptionPrompt(current.id); renderCaptionPrompts(item.id); } if (action === 'delete') { if (!current || !confirm(`Delete saved caption prompt "${current.name}"?`)) return; deleteCaptionPrompt(current.id); renderCaptionPrompts(); } } catch (error) { q('publishing-ai-status').textContent = error.message || 'Saved prompt could not be updated.'; } }
@@ -78,16 +90,16 @@ function renderCopyWorkspaces() {
 }
 async function generateAssistant(kind, platformOnly = false) {
   const status = q(kind === 'caption' ? 'publishing-ai-status' : 'publishing-alt-status'); const trigger = q(kind === 'caption' ? (platformOnly ? 'publishing-ai-platform' : 'publishing-ai-generic') : 'publishing-ai-alt');
-  trigger.disabled = true; showProcessing({ title: kind === 'caption' ? 'Writing your captions…' : (state.carouselSlides.length ? 'Generating slide descriptions…' : 'Generating Alt Text…'), message: kind === 'caption' ? 'Creating caption options for your selected channels.' : (state.carouselSlides.length ? 'Creating accessibility descriptions for each carousel slide.' : 'Creating an accessibility description for your content.') }); status.textContent = kind === 'caption' ? (platformOnly ? 'Generating platform variations…' : 'Generating caption options…') : 'Generating Alt Text…';
+  trigger.disabled = true; const assistantOperation = showProcessing({ title: kind === 'caption' ? 'Writing your captions…' : (state.carouselSlides.length ? 'Generating slide descriptions…' : 'Generating Alt Text…'), message: kind === 'caption' ? 'Creating caption options for your selected channels.' : (state.carouselSlides.length ? 'Creating accessibility descriptions for each carousel slide.' : 'Creating an accessibility description for your content.') }); status.textContent = kind === 'caption' ? (platformOnly ? 'Generating platform variations…' : 'Generating caption options…') : 'Generating Alt Text…';
   try { const response = await fetch(`/api/ai/generate-${kind === 'caption' ? 'caption' : 'alt-text'}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(await assistantPayload(platformOnly ? 'platform' : state.captionMode)) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.');
     if (kind === 'caption') { const host = q('publishing-ai-results'); if (platformOnly) { host.replaceChildren(...selectedPlatforms().flatMap(channel => { const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const options = data.platformCaptions?.[channel.key] || []; const container = document.createElement('div'); renderOptions(container, options, text => { state.platformCaptions[channel.key] = text; renderCopyWorkspaces(); }); return [heading, container]; })); } else renderOptions(host, data.options || [], text => { caption.value = text; }); } else if (data.slideAltText) { state.slideAltText = data.slideAltText; status.textContent = 'Alt Text generated for all carousel slides.'; } else { altText.value = data.altText || ''; }
     savePublishingDraft(); renderCopyWorkspaces();
     if (kind === 'caption') status.textContent = 'Caption options are ready. Choose one to use it.'; else if (!data.slideAltText) status.textContent = 'Alt Text is ready to edit.';
-  } catch (error) { status.textContent = error.message || 'AI generation failed. Your existing content is unchanged.'; } finally { hideProcessing(); trigger.disabled = false; }
+  } catch (error) { status.textContent = error.message || 'AI generation failed. Your existing content is unchanged.'; } finally { hideProcessing(assistantOperation); trigger.disabled = false; }
 }
 async function generateOnePlatform(channel) {
-  const status = q('publishing-ai-status'); showProcessing({ title: 'Writing your captions…', message: 'Creating caption options for your selected channels.' }); status.textContent = `Generating ${channel.service || 'platform'} variations…`;
-  try { const response = await fetch('/api/ai/generate-caption', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...await assistantPayload('platform'), platforms: [channel] }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.'); const options = data.platformCaptions?.[channel.key] || []; const host = q('publishing-ai-results'); const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const result = document.createElement('div'); renderOptions(result, options, text => { state.platformCaptions[channel.key] = text; renderCopyWorkspaces(); }); host.replaceChildren(heading, result); status.textContent = `${channel.service || 'Platform'} options are ready.`; } catch (error) { status.textContent = error.message || 'AI generation failed. Your caption is unchanged.'; } finally { hideProcessing(); }
+  const status = q('publishing-ai-status'); const platformCaptionOperation = showProcessing({ title: 'Writing your captions…', message: 'Creating caption options for your selected channels.' }); status.textContent = `Generating ${channel.service || 'platform'} variations…`;
+  try { const response = await fetch('/api/ai/generate-caption', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...await assistantPayload('platform'), platforms: [channel] }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.'); const options = data.platformCaptions?.[channel.key] || []; const host = q('publishing-ai-results'); const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const result = document.createElement('div'); renderOptions(result, options, text => { state.platformCaptions[channel.key] = text; renderCopyWorkspaces(); }); host.replaceChildren(heading, result); status.textContent = `${channel.service || 'Platform'} options are ready.`; } catch (error) { status.textContent = error.message || 'AI generation failed. Your caption is unchanged.'; } finally { hideProcessing(platformCaptionOperation); }
 }
 
 function setMediaState(source, message = 'Text-only post') {
@@ -190,17 +202,18 @@ async function loadChannels() {
       name.textContent = channel.name || 'Connected channel';
       copy.append(service, name);
       input.checked = state.channels.has(key);
-      input.onchange = () => { input.checked ? state.channels.add(key) : state.channels.delete(key); savePublishingDraft(); renderCopyWorkspaces(); };
+      input.onchange = () => { input.checked ? state.channels.add(key) : state.channels.delete(key); savePublishingDraft(); renderCopyWorkspaces(); renderLinkedinDocumentControl(); };
       state.channelLabels.set(key, channelLabel(channel));
       state.channelData.set(key, channel);
       row.append(input, copy);
       return row;
     }));
+    renderLinkedinDocumentControl();
   } catch (error) {
     q('publishing-status').textContent = 'Unable to load connected channels.';
     const connectionHost = q('publishing-connections');
     if (connectionHost) connectionHost.replaceChildren(Object.assign(document.createElement('small'), { className: 'publishing-connection error', textContent: 'Connection error. Retry channel loading to continue.' }));
-    q('publishing-channels').replaceChildren(Object.assign(document.createElement('p'), { className: 'hint', textContent: 'No channels are available. Caption, media, and other composer controls remain available.' }));
+    q('publishing-channels').replaceChildren(Object.assign(document.createElement('p'), { className: 'hint', textContent: 'No channels are available. Caption, media, and other composer controls remain available.' })); renderLinkedinDocumentControl();
     retry.hidden = false;
   }
 }
@@ -209,7 +222,7 @@ async function uploadOnce() {
   if (state.uploaded) return state.uploaded;
   if (state.mediaSource === 'existing-url') return state.existingMedia;
   if (state.carouselFiles.length || state.carouselSlides.length) {
-    showProcessing({ title: 'Uploading your media…', message: 'Preparing your carousel slides for publishing.' });
+    const carouselUploadOperation = showProcessing({ title: 'Uploading your media…', message: 'Preparing your carousel slides for publishing.' });
     try {
       const items = [];
       const count = state.carouselFiles.length || state.carouselSlides.length;
@@ -225,7 +238,7 @@ async function uploadOnce() {
       state.uploaded = { type: 'carousel', items };
       return state.uploaded;
     } finally {
-      hideProcessing();
+      hideProcessing(carouselUploadOperation);
     }
   }
   if (state.mediaSource === 'generated') {
@@ -240,7 +253,7 @@ async function uploadOnce() {
 
   const form = new FormData();
   form.append('media', state.media);
-  showProcessing({ title: 'Uploading your media…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Preparing your carousel slides for publishing.' : 'Preparing your media for publishing.' });
+  const singleUploadOperation = showProcessing({ title: 'Uploading your media…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Preparing your carousel slides for publishing.' : 'Preparing your media for publishing.' });
   try {
     const response = await fetch('/api/media/upload', { method: 'POST', body: form });
     const data = await response.json();
@@ -248,8 +261,48 @@ async function uploadOnce() {
     state.uploaded = data.media;
     return state.uploaded;
   } finally {
-    hideProcessing();
+    hideProcessing(singleUploadOperation);
   }
+}
+
+async function carouselFilesForLinkedinPdf() {
+  if (state.carouselFiles.length) return state.carouselFiles;
+  return Promise.all(state.carouselSlides.map(async (slide, index) => new File([await previewPngBlob(slide)], `carousel-slide-${index + 1}.png`, { type: 'image/png' })));
+}
+
+async function linkedInThumbnailUrl(files) {
+  const uploadedSlide = state.uploaded?.type === 'carousel' ? state.uploaded.items?.[0] : null;
+  if (typeof uploadedSlide?.url === 'string' && uploadedSlide.url.startsWith('https://')) return uploadedSlide.url;
+  const thumbnail = files[0];
+  if (!thumbnail) throw new Error('LinkedIn document could not be prepared because carousel slide 1 is unavailable.');
+  const form = new FormData();
+  form.append('media', thumbnail, thumbnail.name || 'carousel-slide-01.png');
+  let response; let data;
+  try { response = await fetch('/api/media/upload', { method: 'POST', body: form }); data = await response.json(); }
+  catch { throw new Error('LinkedIn document thumbnail could not be uploaded. Your original carousel is unchanged.'); }
+  if (!response.ok || typeof data.media?.url !== 'string' || !data.media.url.startsWith('https://')) throw new Error(`LinkedIn document thumbnail could not be uploaded. Your original carousel is unchanged. ${data.error?.message || ''}`.trim());
+  return data.media.url;
+}
+
+async function prepareLinkedinDocument(selected) {
+  const linkedIn = selected.filter(channel => channel.service === 'linkedin');
+  if (!linkedIn.length || !isCarousel()) return {};
+  const files = await carouselFilesForLinkedinPdf();
+  const title = linkedinDocumentTitle(state.linkedinDocumentTitle || state.contentContext.headline || caption.value.split(/\r?\n/).find(line => line.trim()));
+  const key = files.map(file => `${file.name}:${file.size}:${file.lastModified || 0}`).join('|') + `|${title}`;
+  if (!state.linkedinDocument || state.linkedinDocument.key !== key) {
+    let file;
+    try { file = await carouselPdfFile(files, title); }
+    catch (error) { throw new Error(`LinkedIn PDF could not be created. Your original carousel is unchanged. ${error.message || ''}`.trim()); }
+    const form = new FormData(); form.append('media', file);
+    let response; let data;
+    try { response = await fetch('/api/media/upload', { method: 'POST', body: form }); data = await response.json(); }
+    catch { throw new Error('LinkedIn PDF could not be uploaded. Your original carousel is unchanged.'); }
+    if (!response.ok) throw new Error(`LinkedIn PDF could not be uploaded. Your original carousel is unchanged. ${data.error?.message || ''}`.trim());
+    const thumbnailUrl = await linkedInThumbnailUrl(files);
+    state.linkedinDocument = { key, media: { ...data.media, resourceType: 'document', mimeType: 'application/pdf', title, thumbnailUrl } };
+  }
+  return Object.fromEntries(linkedIn.map(channel => [channel.key, state.linkedinDocument.media]));
 }
 
 function reset() {
@@ -260,6 +313,7 @@ function reset() {
   clearGeneratedMedia();
   state.carouselSlides = [];
   state.carouselFiles = [];
+  invalidateLinkedinDocument(); state.linkedinDocumentTitle = '';
   state.existingMedia = null;
   state.channels.clear();
   state.platformCaptions = {}; state.platformAltText = {}; state.slideAltText = []; state.contentContext = {};
@@ -304,14 +358,14 @@ document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
 
 mediaInput.onchange = async (event) => {
   const files = [...(event.target.files || [])];
-  if (!files.length) return;
-  if (files.length > 10 || files.some(file => !supportedManualMedia.has(file.type))) { out.textContent = 'Choose up to 10 PNG, JPG, WebP, MP4, MOV, or WebM files.'; mediaInput.value = ''; return; }
-  if (files.length > 1 && files.some(file => !file.type.startsWith('image/'))) { out.textContent = 'A carousel can contain only PNG, JPG, or WebP images. Upload video by itself.'; mediaInput.value = ''; return; }
-  if (files.length > 1) {
-    state.media = null; state.uploaded = null; state.generatedRef = null; clearGeneratedMedia();
+  const selection = classifyManualMedia(files, supportedManualMedia);
+  if (selection.kind === 'empty') return;
+  if (selection.error) { out.textContent = selection.error; mediaInput.value = ''; return; }
+  if (selection.kind === 'carousel') {
+    state.media = null; state.uploaded = null; state.generatedRef = null; clearGeneratedMedia(); invalidateLinkedinDocument();
     state.carouselSlides = []; state.carouselFiles = files; state.carouselIndex = 0; state.existingMedia = null;
     state.contentContext = {}; state.slideAltText = files.map(() => ''); state.platformAltText = {}; altText.value = '';
-    setMediaState('manual-carousel'); renderPublishingCarousel(); renderCopyWorkspaces();
+    setMediaState('manual-carousel'); renderPublishingCarousel(); renderCopyWorkspaces(); renderLinkedinDocumentControl();
     try { state.mediaRef = await savePublishingMedia(files); savePublishingDraft(); }
     catch (error) { out.textContent = 'Carousel loaded, but reload recovery failed: ' + error.message; }
     return;
@@ -320,12 +374,13 @@ mediaInput.onchange = async (event) => {
   state.media = file;
   state.uploaded = null;
   state.generatedRef = null;
+  invalidateLinkedinDocument();
   clearGeneratedMedia();
   state.carouselSlides = [];
   state.carouselFiles = [];
   state.existingMedia = null;
   state.contentContext = {}; state.slideAltText = []; state.platformAltText = {}; altText.value = '';
-  setMediaState('manual');
+  setMediaState('manual'); renderLinkedinDocumentControl();
   const url = URL.createObjectURL(file);
   const holder = q('publishing-media'); holder.replaceChildren();
   const media = document.createElement(file.type.startsWith('video/') ? 'video' : 'img'); media.src = url; if (media.tagName === 'VIDEO') { media.controls = true; media.onloadedmetadata = () => { const meta = document.createElement('small'); meta.className = 'publishing-media-meta'; meta.textContent = `${file.name} · ${bytesLabel(file.size)} · ${Math.round(media.duration || 0)} seconds`; holder.append(meta); }; } else media.alt = 'Selected media preview'; holder.append(media); if (media.tagName !== 'VIDEO') { const meta = document.createElement('small'); meta.className = 'publishing-media-meta'; meta.textContent = `${file.name} · ${bytesLabel(file.size)}`; holder.append(meta); }
@@ -359,12 +414,13 @@ button.onclick = async () => {
   if (!confirm(confirmation)) return;
 
   state.busy = true;
-  showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
+  const publishOperation = showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
   button.disabled = true;
   button.textContent = schedule ? 'Scheduling...' : 'Publishing...';
   try {
     const media = await uploadOnce();
-    showProcessing({ title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
+    const mediaByDestination = await prepareLinkedinDocument(selected);
+    updateProcessing(publishOperation, { title: schedule ? 'Scheduling your post…' : 'Publishing your post…', message: (state.carouselFiles.length || state.carouselSlides.length) ? 'Uploading and publishing your carousel in the correct slide order.' : schedule ? 'Preparing your content for scheduled publishing.' : 'Sending your content to the selected channels.' });
     const response = await fetch('/api/publishing/posts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -376,7 +432,8 @@ button.onclick = async () => {
         destinations: selectedPlatforms().map(channel => ({ connectionId: channel.connectionId || 'legacy', channelId: channel.id })),
         mode: schedule ? 'customScheduled' : 'shareNow',
         ...(dueAt ? { dueAt } : {}),
-        ...(media ? { media } : {})
+        ...(media ? { media } : {}),
+        ...(Object.keys(mediaByDestination).length ? { mediaByDestination } : {})
       })
     });
     const data = await response.json();
@@ -390,7 +447,7 @@ button.onclick = async () => {
   } catch (error) {
     out.textContent = error.message;
   } finally {
-    hideProcessing();
+    hideProcessing(publishOperation);
     state.busy = false;
     button.disabled = false;
     syncModeControl();
@@ -399,12 +456,15 @@ button.onclick = async () => {
 
 document.addEventListener('publishing:generated', async (event) => {
   const result = event.detail || {};
-  showProcessing({ title: 'Preparing Publishing…', message: 'Loading your prepared design.' });
+  const completion = result.completion;
+  beginMediaLifecycle();
+  const publishingHandoffOperation = showProcessing({ title: 'Preparing Publishing…', message: 'Loading your prepared design.' });
   try {
   console.info('[CAROUSEL PUBLISH] 7. Publishing received handoff');
   state.media = null;
   state.uploaded = null;
   state.generatedRef = result.resultRef || null;
+  invalidateLinkedinDocument();
   state.contentContext = { ...state.contentContext, source: result.source || 'unknown', contentType: result.contentType || result.contentFormat || 'single-image', itemId: result.itemId || result.id || null, resultRef: result.resultRef || '' };
   clearGeneratedMedia();
   state.carouselSlides = [];
@@ -418,6 +478,7 @@ document.addEventListener('publishing:generated', async (event) => {
 
   if (result.preparedFullArtwork) {
     state.media = await preparedArtworkFile(result.preparedFullArtwork);
+    mediaLog('[HANDOFF] rendered', `publishing-generated:${state.generatedRef}`, state.media);
     state.mediaRef = await savePublishingMedia(state.media, `publishing-generated:${state.generatedRef}`);
     prepareGeneratedMediaPreview();
     setMediaState('generated-direct');
@@ -434,30 +495,39 @@ document.addEventListener('publishing:generated', async (event) => {
       state.carouselSlides = (asset.slides || []).map(slide => { const node = document.createElement('template'); node.innerHTML = slide.html; return node.content.firstElementChild; });
       if (!state.carouselSlides.length || state.carouselSlides.some(slide => !slide)) throw new Error('Generated carousel could not be loaded. Return to Carousel and try again.');
       state.carouselFiles = await Promise.all(state.carouselSlides.map(async (slide, index) => new File([await previewPngBlob(slide)], `generated-slide-${index + 1}.png`, { type: 'image/png' })));
+      mediaLog('[HANDOFF] rendered', `publishing-generated:${state.generatedRef}`, state.carouselFiles);
       state.mediaRef = await savePublishingMedia(state.carouselFiles, `publishing-generated:${state.generatedRef}`);
-      state.carouselIndex = 0; renderPublishingCarousel();
+      state.carouselIndex = 0; renderPublishingCarousel(); renderLinkedinDocumentControl();
     } else {
       state.generatedFile = new File([await previewPngBlob(state.generatedPreview)], 'generated-design.png', { type: 'image/png' });
       state.media = state.generatedFile;
+      mediaLog('[HANDOFF] rendered', `publishing-generated:${state.generatedRef}`, state.media);
       state.mediaRef = await savePublishingMedia(state.media, `publishing-generated:${state.generatedRef}`);
       prepareGeneratedMediaPreview();
     }
     setMediaState('generated'); out.textContent = asset.type === 'carousel' ? 'Carousel loaded with all slides. Publishing will upload them in this order when you confirm.' : asset.type === 'multi-page' ? 'Multi-page design loaded with all pages. Publishing will upload them in this order when you confirm.' : 'Generated design ready for publishing.';
   }
   }
-  renderCopyWorkspaces();
+    if (!state.mediaRef || (['carousel', 'multi-page'].includes(result.contentType || result.contentFormat) && !state.carouselFiles.length) || (!['carousel', 'multi-page'].includes(result.contentType || result.contentFormat) && !state.media)) throw new Error('Publishing media could not be prepared. Your design has not been sent to Publishing.');
+    renderCopyWorkspaces();
   savePublishingDraft(); showPublishingTab('composer');
   document.dispatchEvent(new Event('navigate:publishing'));
+    if (!validPublishingMedia(state.carouselFiles.length ? state.carouselFiles : state.media)) throw new Error('Publishing media is empty or invalid.');
+    mediaLog('[HANDOFF] saved', state.mediaRef, state.carouselFiles.length ? state.carouselFiles : state.media); mediaLog('[HANDOFF] reference', state.mediaRef, state.carouselFiles.length ? state.carouselFiles : state.media);
+    completion?.resolve({ mediaRef: state.mediaRef, carouselFiles: state.carouselFiles.length });
   console.info('[CAROUSEL PUBLISH] 8. complete');
   } catch (error) {
     setMediaState('none', error.message || 'Generated design could not be loaded.');
     out.textContent = error.message || 'Generated design could not be loaded.';
+    completion?.reject(error);
     console.error('[CAROUSEL PUBLISH] Publishing handoff failed', error);
-  } finally { hideProcessing(); }
+  } finally { hideProcessing(publishingHandoffOperation); }
 });
 
 syncModeControl();
 renderCopyWorkspaces();
+q('publishing-linkedin-document-title').oninput = event => { state.linkedinDocumentTitle = linkedinDocumentTitle(event.target.value); invalidateLinkedinDocument(); savePublishingDraft(); };
+renderLinkedinDocumentControl();
 loadChannels();
 const management = q('publishing-management');
 const composer = q('publishing-composer');
@@ -542,29 +612,35 @@ if (managementStatusName !== 'composer') showPublishingTab(managementStatusName)
 
 // Rehydrate media without replaying the handoff (which would overwrite edited copy).
 async function restorePublishingMedia() {
+  const lifecycle = mediaLifecycleVersion;
+  const reference = state.mediaRef;
+  const source = state.mediaSource;
+  const current = () => lifecycle === mediaLifecycleVersion && reference === state.mediaRef && source === state.mediaSource;
   try {
     if (state.mediaSource === 'generated-direct' && state.mediaRef) {
-      const savedMedia = await loadCalendarAsset(state.mediaRef);
+      const savedMedia = await loadCalendarAsset(state.mediaRef); if (!current()) return;
+      mediaLog('[PUBLISHING] reference found', state.mediaRef, savedMedia?.file);
       if (!savedMedia?.file) throw new Error('Saved Full AI artwork is unavailable. Send it to Publishing again.');
-      state.media = savedMedia.file; prepareGeneratedMediaPreview(); setMediaState('generated-direct');
+      state.media = savedMedia.file; prepareGeneratedMediaPreview(); setMediaState('generated-direct'); mediaLog('[PUBLISHING] file restored', state.mediaRef, state.media); mediaLog('[PUBLISHING] media state set', state.mediaRef, state.media); mediaLog('[PUBLISHING] preview rendered', state.mediaRef, state.media);
     } else if (state.mediaSource === 'generated' && state.generatedRef) {
-      const asset = await loadCalendarAsset(state.generatedRef);
+      const asset = await loadCalendarAsset(state.generatedRef); if (!current()) return;
       if (!asset) throw new Error('Saved design is unavailable. Send it to Publishing again.');
       const node = html => { const template = document.createElement('template'); template.innerHTML = html || ''; return template.content.firstElementChild; };
       state.carouselSlides = ['carousel','multi-page'].includes(asset.type) ? asset.slides.map(slide => node(slide.html)) : [];
       state.generatedPreview = state.carouselSlides[0] || node(asset.html);
-      const savedMedia = state.mediaRef ? await loadCalendarAsset(state.mediaRef) : null;
+      const savedMedia = state.mediaRef ? await loadCalendarAsset(state.mediaRef) : null; if (!current()) return;
+      mediaLog('[PUBLISHING] reference found', state.mediaRef, savedMedia?.file);
       if (state.carouselSlides.length) {
         state.carouselFiles = Array.isArray(savedMedia?.file) ? savedMedia.file : [];
         if (!state.carouselFiles.length) throw new Error('Saved publishing media is unavailable. Send the latest design to Publishing again.');
-        renderPublishingCarousel();
+        renderPublishingCarousel(); mediaLog('[PUBLISHING] file restored', state.mediaRef, state.carouselFiles); mediaLog('[PUBLISHING] preview rendered', state.mediaRef, state.carouselFiles);
       } else {
         if (!savedMedia?.file) throw new Error('Saved publishing media is unavailable. Send the latest design to Publishing again.');
-        state.media = savedMedia.file; prepareGeneratedMediaPreview();
+        state.media = savedMedia.file; prepareGeneratedMediaPreview(); mediaLog('[PUBLISHING] file restored', state.mediaRef, state.media); mediaLog('[PUBLISHING] preview rendered', state.mediaRef, state.media);
       }
-      setMediaState('generated');
+      setMediaState('generated'); mediaLog('[PUBLISHING] media state set', state.mediaRef, state.carouselFiles.length ? state.carouselFiles : state.media);
     } else if (state.mediaSource === 'manual-carousel' && state.mediaRef) {
-      const asset = await loadCalendarAsset(state.mediaRef);
+      const asset = await loadCalendarAsset(state.mediaRef); if (!current()) return;
       if (!Array.isArray(asset?.file) || asset.file.length < 2) throw new Error('Saved carousel upload is unavailable. Please attach it again.');
       state.media = null; state.carouselSlides = []; state.carouselFiles = asset.file; state.carouselIndex = 0;
       if (state.slideAltText.length !== state.carouselFiles.length) state.slideAltText = state.carouselFiles.map(() => '');
@@ -580,7 +656,8 @@ async function restorePublishingMedia() {
       const media = document.createElement(state.existingMedia.resourceType === 'video' ? 'video' : 'img'); media.src = state.existingMedia.url; if (media.tagName === 'VIDEO') media.controls = true;
       q('publishing-media').replaceChildren(media); setMediaState('existing-url');
     }
-  } catch (error) { out.textContent = error.message; setMediaState('none', error.message); }
+  } catch (error) { if (!current()) return; console.error('[PUBLISHING] restore failed', { reference, reason: error.message || String(error) }); out.textContent = error.message; setMediaState('none', error.message); }
+  renderLinkedinDocumentControl();
 }
 restorePublishingMedia();
 document.getElementById('section-publishing')?.addEventListener('change', savePublishingDraft);

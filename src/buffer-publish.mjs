@@ -51,11 +51,16 @@ const cleanAltText = value => typeof value === 'string' ? value.trim().slice(0, 
 
 function assetsFor(media, altText = '', slideAltText = []) {
   if (!media) return undefined;
+  if (media.resourceType === 'document') {
+    const title = String(media.title || '').trim().slice(0, 120);
+    if (!publicUrl(media.url) || !title || !publicUrl(media.thumbnailUrl)) throw new Error('LinkedIn document preparation is incomplete. A PDF, title, and first-slide thumbnail are required.');
+    return [{ document: { url: media.url, title, thumbnailUrl: media.thumbnailUrl } }];
+  }
   if (media.type === 'carousel') return media.items.map((item, index) => ({ image: { url: item.url, ...(cleanAltText(slideAltText[index] || altText) ? { metadata: { altText: cleanAltText(slideAltText[index] || altText) } } : {}) } }));
   return media.resourceType === 'video' ? [{ video: { url: media.url } }] : [{ image: { url: media.url, ...(cleanAltText(altText) ? { metadata: { altText: cleanAltText(altText) } } : {}) } }];
 }
 
-export async function publishPosts({ apiKey, text, channelTexts = {}, tiktokTitle = '', accessibility = {}, channelIds, mode, dueAt, media, fetcher = fetch, mediaVerifier = verifyHostedMedia }) {
+export async function publishPosts({ apiKey, text, channelTexts = {}, tiktokTitle = '', accessibility = {}, channelIds, mode, dueAt, media, mediaByChannel = {}, fetcher = fetch, mediaVerifier = verifyHostedMedia }) {
   const channels = await getBufferChannels({ apiKey, fetcher });
   const channelById = new Map(channels.map(channel => [channel.id, channel]));
   const results = [];
@@ -64,7 +69,7 @@ export async function publishPosts({ apiKey, text, channelTexts = {}, tiktokTitl
     const channel = channelById.get(channelId);
     if (!channel) { results.push({ channelId, success: false, error: 'Selected channel is unavailable.' }); continue; }
     const channelText = typeof channelTexts[channelId] === 'string' && channelTexts[channelId].trim() ? channelTexts[channelId].trim() : text;
-    let preparedMedia = media;
+    let preparedMedia = mediaByChannel[channelId] || media;
 
     if (channel.service === 'tiktok') {
       const validity = validateTikTokMedia(media);

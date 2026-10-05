@@ -882,7 +882,7 @@ async function regenerateReview() {
 
   render();
 
-  showProcessing({ title: 'Generating your designs…', message: 'Creating the selected Calendar content.' });
+  const calendarReviewOperation = showProcessing({ title: 'Generating your designs…', message: 'Creating the selected Calendar content.' });
   try {
     const result =
       await generateCalendarDesign(calendarSingleImageInput(generating));
@@ -933,7 +933,7 @@ async function regenerateReview() {
 
     await openReview(failed);
   } finally {
-    hideProcessing();
+    hideProcessing(calendarReviewOperation);
   }
 
   render();
@@ -1223,7 +1223,7 @@ async function runCalendarQueue(
   }
 
   render();
-  showProcessing({ title: 'Generating your designs…', message: 'Creating the selected Calendar content.' });
+  const calendarQueueOperation = showProcessing({ title: 'Generating your designs…', message: 'Creating the selected Calendar content.' });
 
   let result;
   try {
@@ -1292,7 +1292,7 @@ async function runCalendarQueue(
 
   render();
   } finally {
-    hideProcessing();
+    hideProcessing(calendarQueueOperation);
   }
 }
 

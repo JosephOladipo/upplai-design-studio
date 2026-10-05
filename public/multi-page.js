@@ -4,6 +4,7 @@ import { createMultiPageDraft, normalizeMultiPage, addMultiPage, deleteMultiPage
 import { downloadPng } from '/src/export.js';
 import { loadCalendar, saveCalendar, createManualRow, updateManualRow } from '/src/calendar.js';
 import { showProcessing, hideProcessing } from '/src/processing.js';
+import { handoffToPublishing } from '/src/publishing-handoff.mjs';
 import { saveCalendarAsset } from '/src/calendar-assets.js';
 
 const q = id => document.getElementById(id);
@@ -59,13 +60,13 @@ q('multi-right').onclick = () => { draft = moveMultiPage(draft, selected, 1); se
 q('multi-generate').onclick = async () => {
   const button = q('multi-generate'); const status = q('multi-page-status'); const prompt = q('multi-direction').value.trim();
   if (!prompt) { status.textContent = 'Add a multi-page prompt or creative direction first.'; return; }
-  button.disabled = true; showProcessing({ title: 'Generating your multi-page design…', message: 'Creating the ordered page structure.' });
+  button.disabled = true; const multiGenerationOperation = showProcessing({ title: 'Generating your multi-page design…', message: 'Creating the ordered page structure.' });
   try {
     const response = await fetch('/api/ai/generate-multi-page-content', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt, pageCount: Number(q('multi-page-count').value), direction: prompt, renderMode: q('multi-design-mode').value }) });
     const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'Multi-page generation failed.');
     draft = normalizeMultiPage({ ...draft, title: data.multiPage.title, description: data.multiPage.description, direction: prompt, designMode: q('multi-design-mode').value, pages: data.multiPage.pages }); selected = 0; render(); status.textContent = 'Multi-page design is ready to edit.';
   } catch (error) { status.textContent = error.message || 'Multi-page generation failed. Your current pages are unchanged.'; }
-  finally { hideProcessing(); button.disabled = false; }
+  finally { hideProcessing(multiGenerationOperation); button.disabled = false; }
 };
 async function exportPage(index) { const node = createPage(draft.pages[index], index); await downloadPng(node, 'multi-page', `upplai-multi-page-${String(index + 1).padStart(2, '0')}.png`); }
 
@@ -79,13 +80,13 @@ q('multi-send-publishing').onclick = async () => {
   const button = q('multi-send-publishing');
   if (button.disabled) return;
   button.disabled = true;
-  showProcessing({ title: 'Preparing multi-page design…', message: 'Saving pages in their current order for Publishing.' });
+  const multiPublishingOperation = showProcessing({ title: 'Preparing multi-page design…', message: 'Saving pages in their current order for Publishing.' });
   try {
     const source = normalizeMultiPage(draft);
     const result = await generateMultiPageDesign(source);
     const resultRef = `multi-page-builder:${source.id}`;
     await saveCalendarAsset(resultRef, result);
-    document.dispatchEvent(new CustomEvent('publishing:generated', { detail: {
+    await handoffToPublishing({
       resultRef,
       source: 'create',
       contentType: 'multi-page',
@@ -94,11 +95,11 @@ q('multi-send-publishing').onclick = async () => {
       supportingCopy: source.description || '',
       cta: source.pages.at(-1)?.cta || '',
       multiPage: source
-    } }));
+    });
   } catch (error) {
     q('multi-page-status').textContent = error.message || 'Could not prepare the multi-page design for Publishing.';
   } finally {
-    hideProcessing();
+    hideProcessing(multiPublishingOperation);
     button.disabled = false;
   }
 };q('multi-save-calendar').onclick = () => { const date = prompt('Calendar date (YYYY-MM-DD):', new Date().toLocaleDateString('en-CA')); if (!date) return; const rows = loadCalendar()?.rows || []; const input = { date, headline: draft.title || active().headline || 'Multi-page design', supportingCopy: draft.description, cta: active().cta, style: active().style, contentFormat: 'multi-page', multiPage: draft }; const index = rows.findIndex(row => row.id === calendarEditingId); const result = index < 0 ? createManualRow(input, rows) : updateManualRow(rows[index], input); if (!result.row) return; saveCalendar(index < 0 ? [...rows, result.row] : rows.map((row, i) => i === index ? result.row : row)); calendarEditingId = result.row.id; document.dispatchEvent(new Event('calendar:changed')); document.dispatchEvent(new Event('navigate:calendar')); };

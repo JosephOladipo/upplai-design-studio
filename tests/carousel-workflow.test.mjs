@@ -35,8 +35,8 @@ test('the single shared processing component is used by carousel, design, calend
     source('../src/processing.js'), source('../public/carousel.js'), source('../public/app.js'), source('../public/calendar-table.js'), source('../public/publishing.js')
   ]);
   assert.match(processing, /role="status" aria-live="polite"/);
-  assert.match(processing, /export function showProcessing/);
-  assert.match(processing, /export function hideProcessing/);
+  assert.match(processing, /export function startProcessing/);
+  assert.match(processing, /export function stopProcessing/);
   for (const value of [carousel, app, calendar, publishing]) {
     assert.match(value, /showProcessing/);
     assert.match(value, /hideProcessing/);

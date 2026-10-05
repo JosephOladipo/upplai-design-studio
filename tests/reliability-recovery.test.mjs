@@ -9,7 +9,7 @@ test('carousel publishing handoff persists serialized assets in order and always
   const assets = await file('src/calendar-assets.js');
   assert.match(carousel, /Preparing carousel for Publishing/);
   assert.match(carousel, /await saveCalendarAsset\(resultRef, result\)/);
-  assert.match(carousel, /finally \{\s*hideProcessing\(\)/);
+  assert.match(carousel, /const carouselPublishingOperation = showProcessing[\s\S]*?finally \{\s*hideProcessing\(carouselPublishingOperation\)/);
   assert.match(carousel, /normalizeCarousel\(draft\)/);
   assert.match(assets, /html: slide\.preview\?\.outerHTML \|\| ''/);
   assert.doesNotMatch(assets, /store\.put\(result\.slides/);
