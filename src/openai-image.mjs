@@ -7,6 +7,9 @@ function imageResult(data) {
   if (typeof data !== 'string' || data.length > 40000000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data) || !Buffer.from(data, 'base64').subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) throw new Error('Image generation returned malformed PNG data.');
   return { image: 'data:image/png;base64,' + data };
 }
+const transientImageError = error => { const status=Number(error?.status||error?.statusCode||0), code=String(error?.code||error?.cause?.code||''), name=String(error?.name||''); return status===408||status===429||status>=500||/UND_ERR_CONNECT_TIMEOUT|ECONNRESET|ETIMEDOUT|EAI_AGAIN/i.test(code)||/APIConnectionTimeoutError|APIConnectionError|timeout|network/i.test(name)||/connect timeout|timed out|network/i.test(String(error?.message||'')); };
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+export async function retryImageRequest(request,{sleep=wait,logger=console}={}) { let last; for(let attempt=1;attempt<=3;attempt+=1){ logger.info?.(`[OPENAI IMAGE] attempt ${attempt}/3`); try { const value=await request(); logger.info?.('[OPENAI IMAGE] success'); return value; } catch(error){ last=error; if(attempt===3||!transientImageError(error)){ logger.error?.('[OPENAI IMAGE] final failure',{attempt,name:error?.name||'Error',code:error?.code||error?.cause?.code||null}); throw error; } logger.warn?.('[OPENAI IMAGE] retrying after transient timeout',{attempt,name:error?.name||'Error',code:error?.code||error?.cause?.code||null}); await sleep(attempt*300); } } throw last; }
 
 const essentialHeadline = copy => String(copy?.headline || '').trim().slice(0, 300);
 const correctiveInstruction = (assessment, backgroundPolicy, copy) => `CORRECTIVE REGENERATION: The prior artwork was rejected. ${assessment.reason} Keep the essential headline exact: ${JSON.stringify(essentialHeadline(copy))}. Render that headline comfortably inside the safe frame, with clear margins on every side. Supporting copy and CTA are optional: omit them rather than making them tiny, clipped, or crowded. ${backgroundPolicy === 'white' ? 'For the default background, output only intentional artwork on transparent pixels; do not paint a backdrop, gray wash, gradient, vignette, haze, or canvas lighting.' : 'Preserve the explicitly requested background while correcting typography placement.'}`;
@@ -35,7 +38,7 @@ export async function generateVisual({ config, plan, quality, client, fullArtwor
   }
   if (!client) { const module = await import('openai'); client = new module.default({ apiKey: config.apiKey, maxRetries: 0, timeout: config.timeout }); }
   const create = async extra => {
-    const response = await client.images.generate({ model: config.imageModel, prompt: [prompt, extra].filter(Boolean).join('\n'), n: 1, size: config.size, quality: qualityMap[quality], background: backgroundPolicy === 'white' ? 'transparent' : 'auto', output_format: 'png' });
+    const response = await retryImageRequest(() => client.images.generate({ model: config.imageModel, prompt: [prompt, extra].filter(Boolean).join('\n'), n: 1, size: config.size, quality: qualityMap[quality], background: backgroundPolicy === 'white' ? 'transparent' : 'auto', output_format: 'png' }));
     return imageResult(response.data?.[0]?.b64_json).image;
   };
   const image = await create('');
