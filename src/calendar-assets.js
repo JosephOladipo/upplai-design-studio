@@ -79,3 +79,16 @@ export async function savePublishingMedia(file, id = 'publishing-current-media')
   await transact('readwrite', store => store.put({ id, type: 'publishing-media', file }));
   return id;
 }
+
+export async function saveReelVisualAsset(file, id = `reel-visual:${crypto.randomUUID()}`) {
+  if (!(file instanceof Blob) || !file.size) throw new Error('Generated Reel visual is unavailable.');
+  await transact('readwrite', store => store.put({ id, type: 'reel-visual', file }));
+  return id;
+}
+export async function loadReelVisualAsset(id) { const asset = await loadCalendarAsset(id); return asset?.type === 'reel-visual' ? asset.file : null; }
+
+export async function saveReelUploadAsset(file, id = `reel-upload:${crypto.randomUUID()}`) {
+  if (!(file instanceof Blob) || !file.size) throw new Error('Uploaded Reel media is unavailable.');
+  await transact('readwrite', store => store.put({ id, type: 'reel-upload', file })); return id;
+}
+export async function loadReelUploadAsset(id) { const asset=await loadCalendarAsset(id); return asset?.type==='reel-upload'?asset.file:null; }
