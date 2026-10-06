@@ -230,3 +230,5 @@ document.addEventListener('carousel:builder-slide-saved', event => { const { dra
 document.querySelectorAll('[data-content-type]').forEach(button => button.onclick = () => { const carousel = button.dataset.contentType === 'carousel'; builder.hidden = !carousel; generator.hidden = carousel; standardPreview.hidden = carousel; document.querySelectorAll('[data-content-type]').forEach(item => item.classList.toggle('active', item === button)); if (carousel) render(); });
 render();
 renderSavedCarousels();
+
+q('carousel-create-reel').onclick=()=>{const previews=draft.slides.map((_,index)=>createCarouselSlide(draft,index));document.dispatchEvent(new CustomEvent('reel:use-rendered-designs',{detail:{title:draft.title||'Carousel Reel',previews}}));};

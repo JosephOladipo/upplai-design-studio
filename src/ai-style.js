@@ -462,8 +462,8 @@ export async function prepareAIImage(result) {
   const canvas =
     document.createElement('canvas');
 
-  canvas.width = 1080;
-  canvas.height = 1350;
+  canvas.width = result.targetCanvas?.width || 1080;
+  canvas.height = result.targetCanvas?.height || 1350;
 
   const context =
   canvas.getContext('2d');
@@ -499,8 +499,8 @@ context.fillRect(
 );
 
 const scale = (result.fullArtwork ? Math.min : Math.max)(
-    1080 / image.naturalWidth,
-    1350 / image.naturalHeight
+    canvas.width / image.naturalWidth,
+    canvas.height / image.naturalHeight
   );
 
   const width =
@@ -511,8 +511,8 @@ const scale = (result.fullArtwork ? Math.min : Math.max)(
 
   context.drawImage(
     image,
-    (1080 - width) / 2,
-    (1350 - height) / 2,
+    (canvas.width - width) / 2,
+    (canvas.height - height) / 2,
     width,
     height
   );
@@ -524,6 +524,7 @@ const scale = (result.fullArtwork ? Math.min : Math.max)(
     canvas,
     backgroundCleanup: cleanup,
     fullArtwork: result.fullArtwork === true,
+    targetCanvas: result.targetCanvas || null,
     backgroundPolicy: result.backgroundPolicy || 'auto'
   };
 }

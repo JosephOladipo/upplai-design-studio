@@ -1,4 +1,5 @@
 // Shared Phase 7/7.1 AI design contract.
+import { aiLogoProhibition } from './artwork-policy.mjs';
 
 export const visualStyles = [
   'auto',
@@ -257,6 +258,7 @@ export function safeImagePrompt(plan) {
     plan.imagePrompt,
     subjectInstruction,
     imageSafety,
+    aiLogoProhibition,
     'Portrait visual intended for a 4:5 social design.',
     `Keep important visual interest toward ${plan.subjectPlacement}.`,
     `Reserve genuinely calm negative space in the ${plan.safeTextArea} region for overlaid text.`,

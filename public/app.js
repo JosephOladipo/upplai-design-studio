@@ -13,6 +13,8 @@ import { generateDesign, normalizeDesignInput } from '/src/design-controller.js'
 import { beginLocalEdits, setupLocalEditor } from '/src/local-editor.js';
 import { showProcessing, hideProcessing } from '/src/processing.js';
 import { handoffToPublishing } from '/src/publishing-handoff.mjs';
+import { canvasDimensions, setCanvasDimensions } from '/src/design-format.js';
+import { setupDesignReformat } from '/src/design-reformat.js';
 
 applyBrand();
 setupAIControls();
@@ -25,6 +27,7 @@ const stage = document.querySelector('#canvas-stage');
 const warning = document.querySelector('#fit-warning');
 const download = document.querySelector('#download');
 const sendToPublish = document.querySelector('#send-to-publish');
+const createReelFromDesign = document.querySelector('#create-reel-from-design');
 const generate = form.querySelector('button[type=submit]');
 const another = document.querySelector('#try-another');
 let shownComposition = null;
@@ -32,6 +35,7 @@ let aiDesign = null;
 let aiVersions = [];
 let aiCurrentVersionId = null;
 let aiBusy = false;
+let designReformat = null;
 let aiConfiguration = null;
 const regenerate = document.querySelector('#regenerate-visual');
 const aiIteration = document.querySelector('#ai-iteration');
@@ -111,7 +115,7 @@ let fitFrame = 0;
 const clampEditorZoom = value => Math.min(1.25, Math.max(.25, value));
 
 function setEditorZoom(value, mode = 'manual') {
-  editorZoom = clampEditorZoom(value);
+  editorZoom = mode === 'fit' ? Math.min(1.25, Math.max(.05, value)) : clampEditorZoom(value);
   editorZoomMode = mode;
   preview.style.setProperty('--editor-zoom', String(editorZoom));
   canvasZoomValue.textContent = Math.round(editorZoom * 100) + '%';
@@ -123,7 +127,8 @@ function fitEditorCanvas() {
   fitFrame = requestAnimationFrame(() => {
     const width = Math.max(0, stage.clientWidth - 32);
     const height = Math.max(0, stage.clientHeight - 32);
-    setEditorZoom(Math.min(width / 1080, height / 1350) * .96, 'fit');
+    const size = canvasDimensions(preview);
+    setEditorZoom(Math.min(width / size.width, height / size.height) * .96, 'fit');
   });
 }
 
@@ -177,9 +182,10 @@ function openSharedEditor(options = {}) {
   if (renderedPreview?.cloneNode && renderedPreview !== preview) { const imported = cleanEditedPreview(renderedPreview); imported.id = 'preview'; preview.replaceWith(imported); preview = imported; }
   if (source !== 'create') { document.querySelector('#create-preview-panel').hidden = false; document.querySelector('#generator').closest('.controls').hidden = false; document.querySelector('#carousel-builder').hidden = true; document.querySelector('#multi-page-builder').hidden = true; }
   currentStyle = style || preview.dataset?.style || currentStyle || 'premium-editorial'; calendarEditorRowId = source === 'calendar-single' ? itemId : null; carouselEditorContext = carouselContext;
-  frame.hidden = false; warning.hidden = true; document.querySelector('#empty-preview').hidden = true; download.disabled = false; editDesign.hidden = false; sendToPublish.hidden = contentType !== 'single-image'; sendToPublish.disabled = contentType !== 'single-image'; saveCalendarDesign.hidden = source !== 'calendar-single'; saveCarouselSlide.hidden = !carouselContext;
+  frame.hidden = false; warning.hidden = true; document.querySelector('#empty-preview').hidden = true; download.disabled = false; editDesign.hidden = false; sendToPublish.hidden = contentType !== 'single-image'; createReelFromDesign.hidden = contentType !== 'single-image'; sendToPublish.disabled = contentType !== 'single-image'; saveCalendarDesign.hidden = source !== 'calendar-single'; saveCarouselSlide.hidden = !carouselContext;
   if (['builder','multi-page-builder'].includes(carouselContext?.source)) updateCarouselEditorActions(); else carouselEditorActions.hidden = true;
   preview.dataset.editSource = source; preview.dataset.contentType = contentType; preview.dataset.designMode = designMode; preview.dataset.itemId = itemId || ''; preview.dataset.resultRef = resultRef || ''; preview.dataset.returnDestination = returnDestination;
+  if (source !== 'create') designReformat?.reset();
   scalePreview(); openLocalEditor(); return localEditor;
 }
 
@@ -187,6 +193,12 @@ function openSharedEditor(options = {}) {
 // ==========================================================
 
 function scalePreview() {
+  const size = canvasDimensions(preview);
+  if (localDesignEditor.hidden) {
+    frame.style.aspectRatio = `${size.width} / ${size.height}`;
+    stage.style.width = size.width + 'px';
+    stage.style.height = size.height + 'px';
+  }
   if (!localDesignEditor.hidden) {
     stage.style.transform = 'none';
     queueFitEditorCanvas();
@@ -194,7 +206,7 @@ function scalePreview() {
   }
 
   stage.style.transform =
-    `scale(${frame.clientWidth / 1080})`;
+    `scale(${frame.clientWidth / size.width})`;
 }
 
 new ResizeObserver(scalePreview).observe(frame);
@@ -430,6 +442,7 @@ form.elements.backgroundImage.addEventListener('change', event => {
   currentStyle = null;
   download.disabled = true;
   sendToPublish.hidden = true;
+  createReelFromDesign.hidden = true;
   sendToPublish.disabled = true;
   backgroundImageLoading = (async () => {
     if (!file) return null;
@@ -467,6 +480,7 @@ form.addEventListener('input', event => {
   currentStyle = null;
   download.disabled = true;
   sendToPublish.hidden = true;
+  createReelFromDesign.hidden = true;
   sendToPublish.disabled = true;
 
   updateControls();
@@ -575,6 +589,15 @@ async function renderDesign(value) {
   const preserveCalendarContext = Boolean(calendarEditorRowId && !carouselEditorContext);
   currentStyle = null;
   closeLocalEditor();
+  delete preview.dataset.canvasWidth;
+  delete preview.dataset.canvasHeight;
+  delete preview.dataset.generationContext;
+  delete preview.dataset.formatAction;
+  preview.style.width = ''; preview.style.height = ''; preview.style.minWidth = ''; preview.style.minHeight = ''; preview.style.maxWidth = ''; preview.style.maxHeight = '';
+  // A resized DOM contains absolute native objects; return to the template structure.
+  if (!preview.querySelector('.design-content #preview-headline')) {
+    preview.innerHTML = '<div id="preview-logo" class="preview-logo"></div><div class="design-content"><h3 id="preview-headline"></h3><p id="preview-copy"></p><span id="preview-cta" class="preview-cta"></span></div>';
+  }
   if (!preserveCalendarContext) calendarEditorRowId = null;
   carouselEditorContext = null;
   saveCalendarDesign.hidden = !preserveCalendarContext;
@@ -651,6 +674,7 @@ async function renderDesign(value) {
     }
 
     // CONTENT
+    preview.querySelector('.design-content').hidden = false;
     document.querySelector(
       '#preview-headline'
     ).textContent =
@@ -688,12 +712,15 @@ async function renderDesign(value) {
     ).hidden = true;
 
     let aiNotice = '';
+    preview.dataset.designMode = value.style === 'openai-style' ? value.aiRenderMode : 'native';
     if (value.style === 'openai-style') {
       if (!aiDesign) throw new Error('Generate an AI visual first.');
       aiNotice = applyAIStyle(preview, value, aiDesign);
+      if (aiDesign.targetCanvas) { setCanvasDimensions(preview, aiDesign.targetCanvas); scalePreview(); }
+      preview.dataset.generationContext = JSON.stringify({ plan: aiDesign.plan, planId: aiDesign.planId, value });
       if (value.aiRenderMode === 'full-ai-artwork') {
         preview.querySelector('.design-content').hidden = true;
-        preview.querySelector('#preview-logo').hidden = true;
+        preview.querySelector('#preview-logo').hidden = value.logo === 'off' || !logoData;
       }
     }
     // FIT
@@ -712,11 +739,13 @@ async function renderDesign(value) {
     editDesign.hidden = !fits;
     sendToPublish.hidden = !fits;
     sendToPublish.disabled = !fits;
+    createReelFromDesign.hidden = !fits;
 
     currentStyle =
       fits
         ? style.id
         : null;
+    designReformat?.reset();
 
     if (preserveCalendarContext) saveCalendarDesign.hidden = !fits;
 
@@ -755,6 +784,7 @@ async function renderDesign(value) {
     warning.hidden = false;
     sendToPublish.hidden = true;
     sendToPublish.disabled = true;
+    createReelFromDesign.hidden = true;
     editDesign.hidden = true;
 
     status.textContent =
@@ -978,8 +1008,8 @@ download.addEventListener('click', async () => {
       currentStyle
     );
 
-    status.textContent =
-      'PNG downloaded at 1080 × 1350 pixels.';
+    const size = canvasDimensions(preview);
+    status.textContent = `PNG downloaded at ${size.width} × ${size.height} pixels.`;
   } catch {
     status.textContent =
       'PNG export failed in this browser. Please try again in a current Chrome or Edge browser.';
@@ -1029,6 +1059,7 @@ document.addEventListener('calendar:carousel-slide-edit', event => {
   download.disabled = false;
   editDesign.hidden = false;
   sendToPublish.hidden = true;
+  createReelFromDesign.hidden = true;
   saveCalendarDesign.hidden = true;
   saveCarouselSlide.hidden = false;
   scalePreview();
@@ -1066,6 +1097,7 @@ document.addEventListener('carousel:builder-slide-edit', event => {
   download.disabled = false;
   editDesign.hidden = false;
   sendToPublish.hidden = true;
+  createReelFromDesign.hidden = true;
   saveCalendarDesign.hidden = true;
   saveCarouselSlide.hidden = false;
   saveCarouselSlide.textContent = 'Save Changes';
@@ -1081,7 +1113,8 @@ sendToPublish.addEventListener('click', async () => {
   sendToPublish.disabled = true;
   status.textContent = 'Preparing design for publishing…';
   try {
-    const isPreparedFullArtwork = value.aiRenderMode === 'full-ai-artwork' && aiDesign?.fullArtwork === true && typeof aiDesign.image === 'string';
+    // Export the rendered DOM so native logos/edits and target dimensions survive.
+    const isPreparedFullArtwork = value.aiRenderMode === 'full-ai-artwork' && aiDesign?.fullArtwork === true && typeof aiDesign.image === 'string' && value.logo === 'off' && !preview.dataset.canvasWidth && localDesignEditor.hidden;
     const resultRef = isPreparedFullArtwork ? `full-artwork:${Date.now()}` : `create-result:${Date.now()}`;
     if (!isPreparedFullArtwork) await saveCalendarAsset(resultRef, {
       preview: preview.cloneNode(true),
@@ -1152,6 +1185,7 @@ async function refineCurrentAI() {
   try {
     const data = new FormData();
     data.append('planId', aiDesign.planId);
+    if (preview.dataset.canvasWidth) data.append('format', JSON.stringify({ id: 'custom', ...canvasDimensions(preview) }));
     data.append('quality', state().aiQuality);
     data.append('instruction', aiRefinementInstruction.value.trim());
     data.append('image', dataUrlToFile(aiDesign.image));
@@ -1159,7 +1193,10 @@ async function refineCurrentAI() {
     const visual = await prepareAIImage(result);
     aiDesign = { ...previous, mockMode: result.mockMode, ...visual };
     recordAIVersion(aiDesign, { kind: 'Refined', instruction: aiRefinementInstruction.value.trim() });
-    await renderPreview();
+    if (preview.dataset.canvasWidth && !previous.fullArtwork) {
+      // Keep resized editable typography/objects while replacing only the visual.
+      preview.style.background = `url("${aiDesign.image}") center / contain no-repeat #FFFFFF`;
+    } else await renderPreview();
     aiRefinementInstruction.value = '';
     status.textContent = 'Refined visual ready.';
   } catch (error) {
@@ -1188,7 +1225,7 @@ async function generateAI(regenerateOnly = false) {
       if (typeof planned.planId !== 'string') throw new Error('The server returned an invalid plan identifier.');
     }
     status.textContent = 'Generating visual…';
-    const result = await aiRequest('generate-visual', { planId: planned.planId, quality: value.aiQuality });
+    const result = await aiRequest('generate-visual', { planId: planned.planId, quality: value.aiQuality, ...(regenerateOnly && previous?.targetCanvas ? { format: previous.targetCanvas } : {}) });
     status.textContent = 'Composing design…';
     const visual = await prepareAIImage(result);
     aiDesign = { plan: planned.plan, planId: planned.planId, mockMode: result.mockMode, ...visual };
@@ -1245,3 +1282,42 @@ fetch('/api/ai/status', { signal: AbortSignal.timeout(5000) }).then(response => 
   document.querySelector('#ai-status').textContent = value.error || (value.mockMode ? 'Mock Mode — No API Usage' : value.configured ? 'Live mode — Generate and Regenerate use API credits.' : 'OpenAI is not configured. Enable Mock Mode or configure the server.');
   updateControls();
 }).catch(() => { document.querySelector('#ai-status').textContent = 'AI status unavailable. Check the local server.'; });
+
+createReelFromDesign.addEventListener('click', () => {
+  if (!preview?.cloneNode) return;
+  document.dispatchEvent(new CustomEvent('reel:use-rendered-designs', {
+    detail: { title: 'Design Reel', previews: [preview] }
+  }));
+});
+
+designReformat = setupDesignReformat({
+  preview: () => preview,
+  available: () => Boolean(currentStyle) && !carouselEditorContext,
+  mode: () => preview.dataset.designMode || (currentStyle === 'openai-style' ? state().aiRenderMode : 'native'),
+  status: message => { status.textContent = message; },
+  busy: value => {
+    aiBusy = value;
+    for (const control of [...form.elements, regenerate, aiRefineCurrent, aiTryAnotherVersion, download, editDesign, sendToPublish, createReelFromDesign]) control.disabled = value;
+    if (!value) updateControls();
+  },
+  capture: () => ({ preview: cleanEditedPreview(preview), aiDesign, value: state(), style: currentStyle }),
+  restore: version => {
+    closeLocalEditor();
+    const imported = cleanEditedPreview(version.preview); imported.id = 'preview';
+    setCanvasDimensions(imported, canvasDimensions(imported));
+    preview.replaceWith(imported); preview = imported;
+    aiDesign = version.aiDesign;
+    applyFormValues(version.value);
+    currentStyle = version.style;
+    scalePreview();
+    download.disabled = false; editDesign.hidden = false;
+    openLocalEditor();
+  },
+  reformat: async (source, target) => {
+    let context;
+    try { context = JSON.parse(source.preview.dataset.generationContext || '{}'); } catch { context = {}; }
+    if (!context.planId || !context.plan) throw new Error('This artwork has no retained generation context. Generate it in Create before AI reformatting; Fit Original is available.');
+    const result = await aiRequest('generate-visual', { planId: context.planId, quality: source.value.aiQuality, format: target });
+    return { ...source.aiDesign, plan: context.plan, planId: context.planId, mockMode: result.mockMode, ...await prepareAIImage(result) };
+  }
+});

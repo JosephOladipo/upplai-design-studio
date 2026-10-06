@@ -1,4 +1,5 @@
-import { artworkBackground, artworkInstructions } from './artwork-policy.mjs';
+import { artworkBackground, artworkInstructions, aiLogoProhibition } from './artwork-policy.mjs';
+import { reformatInstruction, generationDimensions } from './design-format.js';
 import { safeImagePrompt } from './ai-plan.mjs';
 import { qualityMap } from './ai-config.cjs';
 import { assessFullArtwork } from './full-artwork-validation.mjs';
@@ -25,29 +26,34 @@ async function acceptFullArtwork({ client, config, image, backgroundPolicy, copy
   return { image: candidate, assessment, attempts: 2, validatorFallback: !assessment.accepted };
 }
 
-export async function generateVisual({ config, plan, quality, client, fullArtwork = false, copy = {}, brandInstruction = '' }) {
+export async function generateVisual({ config, plan, quality, client, fullArtwork = false, copy = {}, brandInstruction = '', targetCanvas = null }) {
   const prompt = fullArtwork
-    ? [plan.imagePrompt, brandInstruction ? `MANDATORY BRAND INSTRUCTION — FOLLOW DIRECTLY:\n${brandInstruction}` : '', 'Create a complete flattened 4:5 social-media artwork. This output is intentionally not natively editable.', artworkInstructions(copy.customDirection), `ESSENTIAL HEADLINE — render this exact text prominently and wholly inside safe margins: ${copy.headline || ''}`, `OPTIONAL supporting copy — include only when it remains clearly readable and comfortably inside safe margins: ${copy.supportingCopy || ''}`, `OPTIONAL CTA — include only when it remains clearly readable and comfortably inside safe margins: ${copy.cta || ''}`].join('\n')
+    ? [plan.imagePrompt, brandInstruction ? `MANDATORY BRAND INSTRUCTION — FOLLOW DIRECTLY:\n${brandInstruction}` : '', targetCanvas ? `Create complete flattened artwork specifically composed for ${targetCanvas.width} x ${targetCanvas.height}.` : 'Create a complete flattened 4:5 social-media artwork. This output is intentionally not natively editable.', artworkInstructions(copy.customDirection), `ESSENTIAL HEADLINE — render this exact text prominently and wholly inside safe margins: ${copy.headline || ''}`, `${targetCanvas ? 'EXACT approved supporting copy — preserve all wording' : 'OPTIONAL supporting copy — include only when it remains clearly readable and comfortably inside safe margins'}: ${copy.supportingCopy || ''}`, `${targetCanvas ? 'EXACT approved CTA — preserve all wording' : 'OPTIONAL CTA — include only when it remains clearly readable and comfortably inside safe margins'}: ${copy.cta || ''}`].join('\n')
     : safeImagePrompt(plan);
+  const finalPrompt = [prompt, targetCanvas ? reformatInstruction(copy, plan, targetCanvas) : '', aiLogoProhibition].filter(Boolean).join('\n');
+  const imageSize = targetCanvas ? generationDimensions(targetCanvas) : config.size;
   const backgroundPolicy = fullArtwork ? artworkBackground(copy.customDirection) : 'auto';
   if (config.mockMode) {
     const base = fullArtwork && backgroundPolicy === 'white' ? '#FFFFFF' : plan.imageStyle === 'futuristic' ? '#101d30' : '#edf5f8';
     const x = plan.subjectPlacement === 'left' ? 140 : 880; const y = plan.subjectPlacement === 'top' ? 260 : 1200;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1536"><rect width="1024" height="1536" fill="${base}"/><circle cx="${x}" cy="${y}" r="240" fill="#50C4F8"/><circle cx="${x - 65}" cy="${y - 60}" r="135" fill="#2BB7F7"/><path d="M${x - 100},${y + 200} l220,-90" stroke="#E24C8E" stroke-width="24"/></svg>`;
-    return { image: 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'), fullArtwork, backgroundPolicy };
+    const formatted = targetCanvas ? svg.replace('width="1024" height="1536"', `width="${targetCanvas.width}" height="${targetCanvas.height}" viewBox="0 0 1024 1536" preserveAspectRatio="xMidYMid meet"`) : svg;
+    return { image: 'data:image/svg+xml;base64,' + Buffer.from(formatted).toString('base64'), fullArtwork, backgroundPolicy, targetCanvas };
   }
   if (!client) { const module = await import('openai'); client = new module.default({ apiKey: config.apiKey, maxRetries: 0, timeout: config.timeout }); }
   const create = async extra => {
-    const response = await retryImageRequest(() => client.images.generate({ model: config.imageModel, prompt: [prompt, extra].filter(Boolean).join('\n'), n: 1, size: config.size, quality: qualityMap[quality], background: backgroundPolicy === 'white' ? 'transparent' : 'auto', output_format: 'png' }));
+    const preserveCopy = targetCanvas ? reformatInstruction(copy, plan, targetCanvas) : '';
+    const correction = targetCanvas ? extra.replace('Supporting copy and CTA are optional: omit them rather than making them tiny, clipped, or crowded.', 'Preserve supporting copy and CTA exactly and recompose them readably inside the target safe frame.') : extra;
+    const response = await retryImageRequest(() => client.images.generate({ model: config.imageModel, prompt: [finalPrompt, correction, preserveCopy, aiLogoProhibition].filter(Boolean).join('\n'), n: 1, size: imageSize, quality: qualityMap[quality], background: backgroundPolicy === 'white' ? 'transparent' : 'auto', output_format: 'png' }));
     return imageResult(response.data?.[0]?.b64_json).image;
   };
   const image = await create('');
   if (!fullArtwork) return { image, fullArtwork, backgroundPolicy };
   const accepted = await acceptFullArtwork({ client, config, image, backgroundPolicy, copy, regenerate: create });
-  return { image: accepted.image, fullArtwork, backgroundPolicy, artworkAcceptance: accepted.assessment, artworkAttempts: accepted.attempts, artworkValidatorFallback: accepted.validatorFallback === true };
+  return { image: accepted.image, fullArtwork, backgroundPolicy, targetCanvas, artworkAcceptance: accepted.assessment, artworkAttempts: accepted.attempts, artworkValidatorFallback: accepted.validatorFallback === true };
 }
 
-export async function refineVisual({ config, plan, quality, image, instruction, client, fullArtwork = false, copy = {}, brandInstruction = '' }) {
+export async function refineVisual({ config, plan, quality, image, instruction, client, fullArtwork = false, copy = {}, brandInstruction = '', targetCanvas = null }) {
   if (!image?.buffer || !['image/png', 'image/jpeg', 'image/webp'].includes(image.mimetype)) throw new Error('A valid PNG, JPG, or WebP visual is required for refinement.');
   copy = { ...copy, customDirection: [copy.customDirection, instruction].filter(Boolean).join('; ') };
   const prompt = fullArtwork ? `Refine this complete social-media artwork. Preserve supplied text unless explicitly asked to change it. ${instruction}\n${artworkInstructions(copy.customDirection)}\nBrand instruction: ${brandInstruction}` : `Refine only this visual background. Preserve the composition unless requested otherwise. ${instruction}. Do not add text, logos, or watermarks.`;
@@ -55,15 +61,18 @@ export async function refineVisual({ config, plan, quality, image, instruction, 
   if (config.mockMode) {
     const shift = [...instruction].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 180;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1536"><rect width="1024" height="1536" fill="${fullArtwork && backgroundPolicy === 'white' ? '#FFFFFF' : '#101d30'}"/><circle cx="${220 + shift}" cy="520" r="280" fill="#50C4F8"/><path d="M80 1160 L940 960" stroke="#E24C8E" stroke-width="34"/></svg>`;
-    return { image: 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'), fullArtwork, backgroundPolicy };
+    const formatted = targetCanvas ? svg.replace('width="1024" height="1536"', `width="${targetCanvas.width}" height="${targetCanvas.height}" viewBox="0 0 1024 1536" preserveAspectRatio="xMidYMid meet"`) : svg;
+    return { image: 'data:image/svg+xml;base64,' + Buffer.from(formatted).toString('base64'), fullArtwork, backgroundPolicy, targetCanvas };
   }
   if (!client) { const module = await import('openai'); client = new module.default({ apiKey: config.apiKey, maxRetries: 0, timeout: config.timeout }); image = { ...image, file: await module.toFile(image.buffer, 'current-design.png', { type: image.mimetype }) }; }
   const edit = async (source, extra = '') => {
-    const response = await client.images.edit({ model: config.imageModel, image: source, prompt: [prompt, extra].filter(Boolean).join('\n'), n: 1, size: config.size, quality: qualityMap[quality], background: backgroundPolicy === 'white' ? 'transparent' : 'auto', output_format: 'png' });
+    const preserveCopy = targetCanvas ? fullArtwork ? reformatInstruction(copy, plan, targetCanvas) : `Visual/background only for ${targetCanvas.width} x ${targetCanvas.height}. Do not render any headline, supporting copy or CTA; the application preserves its native typography separately.` : '';
+    const correction = targetCanvas ? extra.replace('Supporting copy and CTA are optional: omit them rather than making them tiny, clipped, or crowded.', 'Preserve supporting copy and CTA exactly inside the target safe frame.') : extra;
+    const response = await client.images.edit({ model: config.imageModel, image: source, prompt: [prompt, correction, preserveCopy, aiLogoProhibition].filter(Boolean).join('\n'), n: 1, size: targetCanvas ? generationDimensions(targetCanvas) : config.size, quality: qualityMap[quality], background: backgroundPolicy === 'white' ? 'transparent' : 'auto', output_format: 'png' });
     return imageResult(response.data?.[0]?.b64_json).image;
   };
   const output = await edit(image.file || image.buffer);
-  if (!fullArtwork) return { image: output, fullArtwork, backgroundPolicy };
+  if (!fullArtwork) return { image: output, fullArtwork, backgroundPolicy, targetCanvas };
   const accepted = await acceptFullArtwork({ client, config, image: output, backgroundPolicy, copy, regenerate: extra => edit(Buffer.from(output.replace(/^data:image\/png;base64,/, ''), 'base64'), extra) });
-  return { image: accepted.image, fullArtwork, backgroundPolicy, artworkAcceptance: accepted.assessment, artworkAttempts: accepted.attempts, artworkValidatorFallback: accepted.validatorFallback === true };
+  return { image: accepted.image, fullArtwork, backgroundPolicy, targetCanvas, artworkAcceptance: accepted.assessment, artworkAttempts: accepted.attempts, artworkValidatorFallback: accepted.validatorFallback === true };
 }

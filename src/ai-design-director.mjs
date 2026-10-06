@@ -1,4 +1,4 @@
-import { artworkInstructions } from './artwork-policy.mjs';
+import { artworkInstructions, aiLogoProhibition } from './artwork-policy.mjs';
 import {
   planSchema,
   validatePlan,
@@ -335,13 +335,14 @@ The application will render exact typography and the real logo afterward.
 
 ${fullArtworkDirection}
 
-Never use the brand name, logo, font names or color values as generated text.
+Never add the brand name as a branding element, or render logo, font names or color values as extra generated text. Preserve explicitly supplied normal copy containing a company/product name.
 
 Overlay should normally be none or low-strength gradient when the safe text area already has good negative space.
 
 Prefer solving readability through composition and negative space BEFORE recommending a heavy overlay.
 
-${imageSafety}
+${input.renderMode === 'full-ai-artwork' ? 'Preserve requested normal copy, including brand names in sentences.' : imageSafety}
+${aiLogoProhibition}
 `,
 
       input: JSON.stringify(input),

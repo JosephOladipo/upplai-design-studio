@@ -73,6 +73,7 @@ document.addEventListener('navigate:publishing', () => showSection('publishing')
 document.addEventListener('navigate:review', () => showSection('review'));
 document.addEventListener('navigate:calendar', () => showSection('calendar'));
 document.addEventListener('navigate:create', () => showSection('create'));
+document.addEventListener('navigate:reels', () => showSection('reels'));
 backButton.addEventListener('click', () => window.history.back());
 window.addEventListener('popstate', event => { applyingHistory = true; showSection(event.state?.workspace || 'create', { history: false }); applyingHistory = false; }); 
 

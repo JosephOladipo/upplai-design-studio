@@ -205,7 +205,14 @@ app.post('/api/ai/generate-visual', async (req, res) => {
   aiBusy = true;
   try {
     const { generateVisual } = await import('./src/openai-image.mjs');
-    const result = await generateVisual({ config, plan: entry.plan, quality, fullArtwork: entry.renderMode === 'full-ai-artwork', copy: entry, brandInstruction: entry.brandContext?.aiInstruction || '' });
+    let targetCanvas = null;
+    if (req.body.format) {
+      const { normalizeFormat } = await import('./src/design-format.js');
+      try { targetCanvas = normalizeFormat(req.body.format.id, req.body.format.width, req.body.format.height); }
+      catch (error) { return failure(res, 400, 'INVALID_FORMAT', error.message); }
+      if (entry.renderMode !== 'full-ai-artwork') return failure(res, 400, 'INVALID_FORMAT', 'Editable designs resize locally.');
+    }
+    const result = await generateVisual({ config, plan: entry.plan, quality, fullArtwork: entry.renderMode === 'full-ai-artwork', copy: entry, brandInstruction: entry.brandContext?.aiInstruction || '', targetCanvas });
     res.json({ ...result, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
@@ -225,7 +232,13 @@ app.post('/api/ai/refine-visual', (req, res, next) => aiImageUpload.single('imag
   aiBusy = true;
   try {
     const { refineVisual } = await import('./src/openai-image.mjs');
-    const result = await refineVisual({ config, plan: entry.plan, quality, image: req.file, instruction, copy: entry, brandInstruction: entry.brandContext?.aiInstruction || '', fullArtwork: entry.renderMode === 'full-ai-artwork' });
+    let targetCanvas = null;
+    if (req.body.format) {
+      const { normalizeFormat } = await import('./src/design-format.js');
+      try { const format = JSON.parse(req.body.format); targetCanvas = normalizeFormat(format.id, format.width, format.height); }
+      catch (error) { return failure(res, 400, 'INVALID_FORMAT', error.message); }
+    }
+    const result = await refineVisual({ config, plan: entry.plan, quality, image: req.file, instruction, copy: entry, brandInstruction: entry.brandContext?.aiInstruction || '', fullArtwork: entry.renderMode === 'full-ai-artwork', targetCanvas });
     res.json({ ...result, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
@@ -233,9 +246,9 @@ app.post('/api/ai/refine-visual', (req, res, next) => aiImageUpload.single('imag
 
 app.use('/api', (_req, res) => failure(res, 404, 'API_NOT_FOUND', 'This API endpoint is unavailable. Restart the local app and try again.'));
 // Only browser modules are public; server-only modules stay private.
-const browserSafeMjs = new Set(['/ai-plan.mjs', '/publishing-handoff.mjs', '/linkedin-carousel-document.mjs', '/reel-project.mjs', '/reel-planner.mjs']);
+const browserSafeMjs = new Set(['/ai-plan.mjs', '/publishing-handoff.mjs', '/linkedin-carousel-document.mjs', '/reel-project.mjs', '/reel-planner.mjs', '/reel-design-adapter.mjs', '/reel-source-conversion.mjs']);
 app.use('/src', (req, res, next) => {
-  if (!/^\/[a-z-]+\.js$/.test(req.path) && !browserSafeMjs.has(req.path)) return res.sendStatus(404);
+  if (!/^\/[a-z-]+\.js$/.test(req.path) && req.path !== '/artwork-policy.mjs' && !browserSafeMjs.has(req.path)) return res.sendStatus(404);
   next();
 }, express.static(path.join(__dirname, 'src')));
 app.use(express.static(path.join(__dirname, 'public')));
