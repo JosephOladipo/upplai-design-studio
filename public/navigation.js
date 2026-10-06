@@ -11,6 +11,7 @@ const calendarButton =
   document.getElementById('nav-calendar');
 const reviewButton = document.getElementById('nav-review');
 const publishingButton = document.getElementById('nav-publishing');
+const reelsButton = document.getElementById('nav-reels');
 
 const createSection =
   document.getElementById('section-create');
@@ -22,10 +23,11 @@ const calendarSection =
   document.getElementById('section-calendar');
 const reviewSection = document.getElementById('section-review');
 const publishingSection = document.getElementById('section-publishing');
+const reelsSection = document.getElementById('section-reels');
 const WORKSPACE_KEY = 'upplai-design-studio-active-workspace';
 const backButton = document.getElementById('app-back');
 let applyingHistory = false;
-const validWorkspaces = new Set(['create', 'brand', 'calendar', 'review', 'publishing']);
+const validWorkspaces = new Set(['create', 'brand', 'calendar', 'review', 'publishing','reels']);
 
 
 function showSection(section, { history = true } = {}) {
@@ -34,7 +36,7 @@ function showSection(section, { history = true } = {}) {
     create: [createButton, createSection],
     brand: [brandButton, brandSection],
     calendar: [calendarButton, calendarSection],
-    review: [reviewButton, reviewSection], publishing: [publishingButton, publishingSection]
+    review: [reviewButton, reviewSection], publishing: [publishingButton, publishingSection], reels: [reelsButton, reelsSection]
   };
 
   for (const [name, [button, content]] of Object.entries(sections)) {
@@ -66,6 +68,7 @@ calendarButton.addEventListener(
 );
 reviewButton.addEventListener('click', () => showSection('review'));
 publishingButton.addEventListener('click', () => showSection('publishing'));
+reelsButton.addEventListener('click', () => showSection('reels'));
 document.addEventListener('navigate:publishing', () => showSection('publishing'));
 document.addEventListener('navigate:review', () => showSection('review'));
 document.addEventListener('navigate:calendar', () => showSection('calendar'));

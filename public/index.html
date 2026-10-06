@@ -9,7 +9,7 @@
 <script type="module" src="/app.js"></script>
 <script type="module" src="/carousel.js"></script>
 <script type="module" src="/multi-page.js"></script>
-<script type="module" src="/navigation.js"></script>
+<script type="module" src="/navigation.js"></script><script type="module" src="/reels.js"></script>
 <script type="module" src="/brand-kit-ui.js"></script>
 <script type="module" src="/calendar.js"></script>
 <script type="module" src="/calendar-table.js"></script>
@@ -51,7 +51,7 @@
       Calendar
     </button>
     <button id="nav-review" class="studio-nav-button" type="button" data-section="review" aria-pressed="false">Review</button>
-    <button id="nav-publishing" class="studio-nav-button" type="button" aria-pressed="false">Publish</button>
+    <button id="nav-publishing" class="studio-nav-button" type="button" aria-pressed="false">Publish</button><button id="nav-reels" class="studio-nav-button" type="button" aria-pressed="false">Reels</button>
     <button
       id="nav-brand"
       class="studio-nav-button"
@@ -1108,7 +1108,8 @@
   </main>
 
 
-  <main id="section-publishing" hidden>
+  <main id="section-reels" hidden><section class="panel"><h1>Reel Builder</h1><label>Reel Title<input id="reel-title" placeholder="Reel title"></label><label>What should this Reel be about?<textarea id="reel-source"></textarea></label><button id="reel-create" type="button">Create Reel</button><section><h2>AI Reel Generator</h2><label>Reel Topic / Content<textarea id="reel-ai-content" rows="6"></textarea></label><label>Target Duration<select id="reel-target"><option value="15">15 sec</option><option value="30" selected>30 sec</option><option value="45">45 sec</option><option value="60">60 sec</option></select></label><label>Reel Style<select id="reel-style"><option value="educational">Educational</option><option value="storytelling">Storytelling</option><option value="promotional">Promotional</option><option value="listicle">Listicle</option><option value="quick-tips">Quick Tips</option></select></label><button id="reel-generate" type="button">Generate Reel Scenes</button><p id="reel-ai-status" class="hint"></p></section><button id="reel-add" type="button">+ Add Scene</button><button id="reel-play" type="button">Play Preview</button><button id="reel-pause" type="button">Pause</button><p id="reel-total"></p><div id="reel-preview" class="reel-preview"></div><div id="reel-controls"><label>Headline<input id="reel-headline"></label><label>Body text<textarea id="reel-body"></textarea></label><label>Duration<input id="reel-duration" type="number" min="1" max="15"></label><label>Visual Direction<textarea id="reel-visual-direction"></textarea></label><label>Transition<select id="reel-transition"><option value="fade">Fade</option><option value="cut">Cut</option></select></label><label>Background<input id="reel-background" type="color"></label></div><div id="reel-scenes"></div></section></main>
+<main id="section-publishing" hidden>
   <section class="panel publishing">
     <div class="review-workspace-header publishing-header">
       <div><h1>Publishing</h1><p class="hint">Prepare and schedule your content.</p></div>

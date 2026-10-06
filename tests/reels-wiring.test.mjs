@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';
+test('Reel browser modules and planning route are wired',()=>{const server=fs.readFileSync('server.js','utf8');const reels=fs.readFileSync('public/reels.js','utf8');assert.match(server,/reel-planner\.mjs/);assert.match(server,/app\.post\('\/api\/reels\/plan'/);assert.match(reels,/fetch\('\/api\/reels\/plan'/);assert.doesNotMatch(reels,/\\\\nimport/);});

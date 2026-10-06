@@ -229,9 +229,11 @@ app.post('/api/ai/refine-visual', (req, res, next) => aiImageUpload.single('imag
     res.json({ ...result, mockMode: config.mockMode });
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
-});app.use('/api', (_req, res) => failure(res, 404, 'API_NOT_FOUND', 'This API endpoint is unavailable. Restart the local app and try again.'));
+});app.post('/api/reels/plan', async (req,res) => { const content=String(req.body?.content||'').trim(); const targetDuration=Number(req.body?.targetDuration||30); const style=String(req.body?.style||'educational'); if(!content) return failure(res,400,'INVALID_INPUT','Add Reel topic or content.'); try { const { planReel }=await import('./src/reel-planner.mjs'); res.json({ plan: await planReel({config,content,targetDuration,style}) }); } catch(error) { failure(res,502,'REEL_PLAN_FAILED',error?.message||'Reel planning failed.'); } });
+
+app.use('/api', (_req, res) => failure(res, 404, 'API_NOT_FOUND', 'This API endpoint is unavailable. Restart the local app and try again.'));
 // Only browser modules are public; server-only modules stay private.
-const browserSafeMjs = new Set(['/ai-plan.mjs', '/publishing-handoff.mjs', '/linkedin-carousel-document.mjs']);
+const browserSafeMjs = new Set(['/ai-plan.mjs', '/publishing-handoff.mjs', '/linkedin-carousel-document.mjs', '/reel-project.mjs', '/reel-planner.mjs']);
 app.use('/src', (req, res, next) => {
   if (!/^\/[a-z-]+\.js$/.test(req.path) && !browserSafeMjs.has(req.path)) return res.sendStatus(404);
   next();
