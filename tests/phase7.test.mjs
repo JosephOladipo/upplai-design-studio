@@ -331,6 +331,14 @@ test('Local Phase 7 API works entirely in Mock Mode', async () => {
     'http://127.0.0.1:' +
     server.address().port;
 
+    const localOrigin = await fetch(root + '/api/ai/design-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: root },
+      body: JSON.stringify(input)
+    });
+
+    assert.equal(localOrigin.status, 200);
+
   const post = (path, body) =>
     fetch(root + '/api/ai/' + path, {
       method: 'POST',
@@ -562,6 +570,32 @@ test('Local Phase 7 API works entirely in Mock Mode', async () => {
     );
 
 
+    process.env.APP_ORIGIN = 'https://studio.example.test/';
+
+    const hostedOrigin = await fetch(root + '/api/ai/design-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://studio.example.test' },
+      body: JSON.stringify(input)
+    });
+
+    assert.equal(hostedOrigin.status, 200);
+
+    const trailingSlashOrigin = await fetch(root + '/api/ai/design-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://studio.example.test/' },
+      body: JSON.stringify(input)
+    });
+
+    assert.equal(trailingSlashOrigin.status, 200);
+
+    const invalidContentType = await fetch(root + '/api/ai/design-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain', Origin: 'https://studio.example.test' },
+      body: JSON.stringify(input)
+    });
+
+    assert.equal(invalidContentType.status, 403);
+
     const blockedOrigin =
       await fetch(
         root +
@@ -588,6 +622,7 @@ test('Local Phase 7 API works entirely in Mock Mode', async () => {
     );
 
   } finally {
+    delete process.env.APP_ORIGIN;
 
     await new Promise(resolve => {
       server.close(resolve);

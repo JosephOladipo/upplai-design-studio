@@ -93,8 +93,18 @@ function mediaFailure(error, file) {
   designModel: config.designModel, imageModel: config.imageModel, imageEngine: 'OpenAI Images API',
   defaultQuality: Object.keys(qualityMap).find(k => qualityMap[k] === config.quality) || 'draft', error: config.error }));
 function failure(res, status, code, message) { res.status(status).json({ error: { code, message } }); }
+function normalizedOrigin(value) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  try {
+    const origin = new URL(value.trim()).origin;
+    return /^https?:\/\//.test(origin) ? origin : '';
+  } catch { return ''; }
+}
 function checkRequest(req, res, multipart = false, allowConcurrent = false) {
-  if (!(multipart ? req.is('multipart/form-data') : req.is('application/json')) || (req.headers.origin && req.headers.origin !== 'http://' + req.headers.host)) {
+  const configuredOrigin = normalizedOrigin(process.env.APP_ORIGIN);
+  const requestOrigin = normalizedOrigin(req.headers.origin);
+  const expectedOrigin = configuredOrigin || `${req.protocol}://${req.get('host')}`;
+  if (!(multipart ? req.is('multipart/form-data') : req.is('application/json')) || (req.headers.origin && requestOrigin !== expectedOrigin)) {
     failure(res, 403, 'REQUEST_BLOCKED', 'Use the local application to generate designs.'); return false;
   }
   if (config.error) { failure(res, 503, 'CONFIGURATION', config.error); return false; }
