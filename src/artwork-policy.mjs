@@ -1,16 +1,10 @@
 // Shared by planning, generation and refinement. Only user direction selects a backdrop.
 export const aiLogoProhibition = 'MANDATORY LOGO POLICY (Logo On AND Logo Off): DO NOT generate any logo, brand mark, wordmark, signature, fake branding graphic or approximate brand symbol. DO NOT generate the Upplai logo. Never imitate, redraw, approximate or invent the Upplai logo or any brand logo. DO NOT place "Upplai" as a logo/signature/branding element. Leave logo placement to the application\'s native logo system: Logo On adds the REAL configured logo separately as an editable native object; Logo Off adds no logo. Preserve legitimate user-requested normal copy containing company/product names (for example, "Match your resume to the role with Upplai."). This rule overrides any conflicting creative or brand instruction.';
 export const artworkSafeArea = 'TEXT SAFE AREA: Keep all important text comfortably inside all four edges, with generous space above the headline and below the CTA. Separate headline, supporting copy, CTA and visual elements deliberately. Never clip text. Allow creative layouts inside these safe margins.';
-export function artworkBackground(direction = '') {
-  const clauses = String(direction).split(/[.!;\n]/).filter(x => /background|backdrop|canvas|dark theme|dark mode|full[- ]bleed/i.test(x));
-  if (!clauses.length) return 'white';
-  const last = clauses.at(-1);
-  if (/\b(?:pure |plain |solid )?white\b|#fff(?:fff)?\b/i.test(last) && !/off[- ]white|(?:not|no|avoid)\s+(?:a\s+)?white/i.test(last)) return 'white';
-  return 'custom';
-}
+export const brightCanvasPolicy = 'MANDATORY BRIGHT CANVAS POLICY: Keep the entire exposed canvas pure white (#FFFFFF) or extremely close to white with consistent brightness from top to bottom. DO NOT add dark center gradients, gray vignettes, spotlight shadows, smoky overlays, black fades, dark radial gradients, or heavy luminance changes behind the headline, body text, CTA, or central reading area. Do not darken the middle for contrast. Depth may use only very soft local object shadows, subtle pale blue or pale pink geometric accents, light translucent cards, and gentle shadows directly beneath objects. Any gradient must be extremely light and must not make the canvas gray, dirty, or dark. This rule overrides any conflicting background direction.';
+export function artworkBackground() { return 'white'; }
 export function artworkInstructions(direction = '') {
-  return [aiLogoProhibition, artworkSafeArea, artworkBackground(direction) === 'white'
-    ? 'DEFAULT CANVAS: Final exposed canvas must be pure white (#FFFFFF). Generate the non-content canvas as transparent alpha, without opaque washes, gradients, tints or vignettes; the app composites onto #FFFFFF. Preserve localized object shadows and antialiasing. Use brand colors in typography, objects and accents, not the main canvas.'
-    : 'USER BACKGROUND: Render the background/color/style explicitly requested in the user direction. Do not force a white or transparent background.',
-    'Respect Brand Kit and AI Brand Instruction for content and design elements; the explicit user background takes precedence.'].join('\n');
+  return [aiLogoProhibition, artworkSafeArea, brightCanvasPolicy,
+    'DEFAULT CANVAS: Final exposed canvas must be pure white (#FFFFFF). Generate the non-content canvas as transparent alpha, without opaque washes, gradients, tints or vignettes; the app composites onto #FFFFFF. Preserve localized object shadows and antialiasing. Use brand colors in typography, objects and accents, not the main canvas.',
+    'Respect Brand Kit and AI Brand Instruction for content and design elements without changing the mandatory bright canvas.'].join('\n');
 }

@@ -10,7 +10,7 @@ export function proportionalSafeFrame(width, height) {
 
 export function normalizeArtworkAssessment(value, backgroundPolicy) {
   const safe = value && value.typographyWithinSafeFrame === true && value.criticalTextPresent === true;
-  const background = backgroundPolicy === 'custom' || value?.backgroundCanvas === 'pass';
+  const background = value?.backgroundCanvas === 'pass';
   // The browser deterministically clears eligible edge-connected neutral backdrop
   // pixels and composites the final default canvas onto #FFFFFF. Vision's
   // background reading remains diagnostic; critical typography remains the gate.
@@ -21,9 +21,7 @@ export async function assessFullArtwork({ client, config, image, backgroundPolic
   const { width, height } = pngDimensions(image);
   const frame = proportionalSafeFrame(width, height);
   const headline = String(copy.headline || '').trim().slice(0, 300);
-  const backgroundInstruction = backgroundPolicy === 'white'
-    ? 'Return pass for backgroundCanvas only when the default exposed canvas is pure white or transparent with no large gray/colored backdrop, gradient, vignette, haze, or environmental wash. Local object shadows are allowed.'
-    : 'The user explicitly requested a custom background; do not reject that background.';
+  const backgroundInstruction = 'Return pass for backgroundCanvas only when the exposed canvas is pure white or transparent with no large gray/colored backdrop, dark center gradient, vignette, spotlight shadow, haze, smoky overlay, black fade, radial darkening, or environmental wash. Local object shadows and subtle pale blue or pale pink accents are allowed.';
   const response = await client.responses.create({
     model: config.designModel, store: false, max_output_tokens: 300,
     text: { format: { type: 'json_schema', name: 'full_artwork_acceptance', strict: true, schema: { type: 'object', additionalProperties: false, properties: { backgroundCanvas: { type: 'string', enum: ['pass', 'fail'] }, typographyWithinSafeFrame: { type: 'boolean' }, criticalTextPresent: { type: 'boolean' } }, required: ['backgroundCanvas', 'typographyWithinSafeFrame', 'criticalTextPresent'] } } },

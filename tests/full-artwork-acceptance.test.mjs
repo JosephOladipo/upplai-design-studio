@@ -21,10 +21,10 @@ test('Full AI safe frame scales from the 1080 by 1350 target', () => {
   assert.deepEqual(proportionalSafeFrame(540, 675), { top: 40, bottom: 40, left: 38, right: 38 });
 });
 
-test('explicit custom backgrounds bypass only default-white acceptance', () => {
+test('strict bright canvas policy keeps a failed background diagnostic visible', () => {
   const result = normalizeArtworkAssessment({ backgroundCanvas: 'fail', typographyWithinSafeFrame: true, criticalTextPresent: true }, 'custom');
   assert.equal(result.accepted, true);
-  assert.equal(result.backgroundAccepted, true);
+  assert.equal(result.backgroundAccepted, false);
 });
 
 test('default Full AI accepts a background diagnostic failure when critical typography is safe', async () => {

@@ -9,9 +9,10 @@ test('Full AI Artwork defaults to a transparent-to-white canvas with safe areas'
   assert.match(artworkInstructions(''), /TEXT SAFE AREA/);
 });
 
-test('an explicit Full AI Artwork backdrop is preserved', () => {
-  assert.equal(artworkBackground('Use a deep navy background with pink accents.'), 'custom');
-  assert.match(artworkInstructions('Use a deep navy background with pink accents.'), /USER BACKGROUND/);
+test('strict bright canvas policy overrides a dark background direction', () => {
+  assert.equal(artworkBackground('Use a deep navy background with pink accents.'), 'white');
+  assert.match(artworkInstructions('Use a deep navy background with pink accents.'), /dark center gradients/);
+  assert.match(artworkInstructions('Use a deep navy background with pink accents.'), /pure white \(#FFFFFF\)/);
 });
 
 test('opaque neutral backdrop connected to an edge becomes transparent without clearing isolated gray artwork', () => {
