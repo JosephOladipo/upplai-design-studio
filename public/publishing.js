@@ -65,7 +65,7 @@ function channelKey(channel) { return String(channel.connectionId || 'legacy') +
 function selectedPlatforms() { return [...state.channels].map(id => ({ key: id, ...(state.channelData.get(id) || {}) })).filter(channel => channel.id); }
 function beginMediaLifecycle() { mediaLifecycleVersion += 1; return mediaLifecycleVersion; }
 function validImageFile(file) { return file instanceof Blob && file.size > 0 && /^image\/(png|jpeg|webp)$/i.test(file.type); }
-function validPublishingMedia(value) { return Array.isArray(value) ? value.length > 1 && value.every(validImageFile) : validImageFile(value); }
+function validPublishingMedia(value) { return Array.isArray(value) ? value.length > 1 && value.every(validImageFile) : Boolean(value instanceof Blob && value.size > 0 && (/^image\/(png|jpeg|webp)$/i.test(value.type) || value.type === 'video/mp4')); }
 function mediaLog(label, reference, value) { const files = Array.isArray(value) ? value : [value]; console.info(label, { reference: reference || '', fileType: files.map(file => file?.type || '').join(','), fileSize: files.map(file => Number(file?.size || 0)).join(',') }); }
 function invalidateLinkedinDocument() { state.linkedinDocument = null; }
 function isCarousel() { return Boolean(state.carouselFiles.length || state.carouselSlides.length); }
@@ -104,7 +104,7 @@ async function generateOnePlatform(channel) {
 
 function setMediaState(source, message = 'Text-only post') {
   state.mediaSource = source;
-  const labels = { manual: 'Uploaded media', 'manual-carousel': 'Uploaded carousel', generated: 'Generated design', 'generated-direct': 'Generated design', 'existing-url': 'Existing media' };
+  const labels = { manual: 'Uploaded media', 'manual-carousel': 'Uploaded carousel', generated: 'Generated design', 'generated-direct': 'Generated design', 'existing-url': 'Existing media', reel: 'Reel video' };
   const label = labels[source];
   mediaBadge.hidden = !label;
   mediaBadge.textContent = label || '';
@@ -136,6 +136,13 @@ function prepareGeneratedMediaPreview() {
   visiblePreview.removeAttribute('id');
   visiblePreview.setAttribute('aria-label', 'Generated design ready to publish');
   q('publishing-media').replaceChildren(visiblePreview);
+}
+function prepareVideoMediaPreview(file) {
+  const holder = q('publishing-media'); holder.replaceChildren();
+  const video = document.createElement('video'); video.controls = true; video.playsInline = true; video.src = URL.createObjectURL(file);
+  const meta = document.createElement('small'); meta.className = 'publishing-media-meta';
+  video.onloadedmetadata = () => { meta.textContent = `${file.name} · ${bytesLabel(file.size)} · ${Math.round(video.duration || 0)} seconds`; };
+  holder.append(video, meta);
 }
 
 async function preparedArtworkFile(dataUrl) {
@@ -465,7 +472,7 @@ document.addEventListener('publishing:generated', async (event) => {
   state.uploaded = null;
   state.generatedRef = result.resultRef || null;
   invalidateLinkedinDocument();
-  state.contentContext = { ...state.contentContext, source: result.source || 'unknown', contentType: result.contentType || result.contentFormat || 'single-image', itemId: result.itemId || result.id || null, resultRef: result.resultRef || '' };
+  state.contentContext = { ...state.contentContext, source: result.source || 'unknown', contentType: result.contentType || result.contentFormat || 'single-image', itemId: result.itemId || result.id || null, resultRef: result.resultRef || '', reel: result.reelContext || null };
   clearGeneratedMedia();
   state.carouselSlides = [];
   state.carouselFiles = [];
@@ -476,7 +483,15 @@ document.addEventListener('publishing:generated', async (event) => {
   state.contentContext = { ...state.contentContext, headline: result.headline || '', supportingCopy: result.supportingCopy || '', cta: result.cta || '', carousel: result.carousel || null, brand: { name: brand.name || 'Upplai', aiInstruction: brand.aiInstruction || '' } };
   state.slideAltText = Array.isArray(result.carousel?.slides) ? result.carousel.slides.map(() => '') : [];
 
-  if (result.preparedFullArtwork) {
+  if (result.reelMediaRef) {
+    const asset = await loadCalendarAsset(result.reelMediaRef);
+    if (!asset?.file || asset.file.type !== 'video/mp4') throw new Error('The rendered Reel MP4 could not be loaded. Return to Reels and render it again.');
+    state.media = asset.file;
+    state.mediaRef = await savePublishingMedia(state.media, `publishing-reel:${result.reelMediaRef}`);
+    prepareVideoMediaPreview(state.media);
+    setMediaState('reel');
+    out.textContent = 'Reel video ready for publishing.';
+  } else if (result.preparedFullArtwork) {
     state.media = await preparedArtworkFile(result.preparedFullArtwork);
     mediaLog('[HANDOFF] rendered', `publishing-generated:${state.generatedRef}`, state.media);
     state.mediaRef = await savePublishingMedia(state.media, `publishing-generated:${state.generatedRef}`);

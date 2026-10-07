@@ -8,6 +8,9 @@ export function setupDesignReformat(adapter) {
   const action = panel.querySelector('#design-format-action');
   const apply = panel.querySelector('#design-format-apply');
   const history = panel.querySelector('#design-format-versions');
+  const previous = panel.querySelector('#design-format-previous');
+  const nextButton = panel.querySelector('#design-format-next');
+  const active = panel.querySelector('#design-format-active');
   let versions = [], current = -1, busy = false;
   for (const item of formatPresets) preset.add(new Option(`${item.label} — ${item.width} × ${item.height}`, item.id));
   preset.add(new Option('Custom', 'custom'));
@@ -23,6 +26,12 @@ export function setupDesignReformat(adapter) {
     apply.textContent = full ? 'Create Format Version' : 'Resize as New Version';
     apply.disabled = busy;
     history.disabled = busy;
+    previous.disabled = busy || current <= 0;
+    nextButton.disabled = busy || current >= versions.length - 1;
+    const size = canvasDimensions(current >= 0 ? versions[current].preview : adapter.preview());
+    const gcd = (a, b) => b ? gcd(b, a % b) : a;
+    const divisor = gcd(size.width, size.height);
+    active.textContent = `${size.width} × ${size.height} · ${size.width / divisor}:${size.height / divisor}`;
   }
   function snapshot(name) {
     const result = adapter.capture();
@@ -31,13 +40,15 @@ export function setupDesignReformat(adapter) {
   function saveCurrent() {
     if (current >= 0) versions[current] = { ...adapter.capture(), label: versions[current].label };
   }
-  history.addEventListener('change', () => {
+  function switchVersion(next) {
     if (busy) return;
-    const next = Number(history.value);
     if (!versions[next]) return;
     saveCurrent(); current = next;
     adapter.restore(versions[next]); sync();
-  });
+  }
+  history.addEventListener('change', () => switchVersion(Number(history.value)));
+  previous.addEventListener('click', () => switchVersion(current - 1));
+  nextButton.addEventListener('click', () => switchVersion(current + 1));
   apply.addEventListener('click', async () => {
     if (busy || !adapter.available()) return;
     let target;

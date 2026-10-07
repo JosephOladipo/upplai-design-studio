@@ -26,6 +26,7 @@ const publishingSection = document.getElementById('section-publishing');
 const reelsSection = document.getElementById('section-reels');
 const WORKSPACE_KEY = 'upplai-design-studio-active-workspace';
 const backButton = document.getElementById('app-back');
+const mobileNavToggle = document.getElementById('mobile-nav-toggle');
 let applyingHistory = false;
 const validWorkspaces = new Set(['create', 'brand', 'calendar', 'review', 'publishing','reels']);
 
@@ -47,6 +48,8 @@ function showSection(section, { history = true } = {}) {
   }
   try { localStorage.setItem(WORKSPACE_KEY, section); } catch { /* navigation remains usable without storage */ }
   document.dispatchEvent(new CustomEvent('workspace:changed', { detail: { workspace: section } }));
+  document.body.classList.remove('mobile-nav-open');
+  mobileNavToggle?.setAttribute('aria-expanded', 'false');
   if (history && !applyingHistory) { window.history.pushState({ workspace: section }, '', '#' + section); backButton.hidden = false; }
 }
 
@@ -69,6 +72,10 @@ calendarButton.addEventListener(
 reviewButton.addEventListener('click', () => showSection('review'));
 publishingButton.addEventListener('click', () => showSection('publishing'));
 reelsButton.addEventListener('click', () => showSection('reels'));
+mobileNavToggle?.addEventListener('click', () => {
+  const open = document.body.classList.toggle('mobile-nav-open');
+  mobileNavToggle.setAttribute('aria-expanded', String(open));
+});
 document.addEventListener('navigate:publishing', () => showSection('publishing'));
 document.addEventListener('navigate:review', () => showSection('review'));
 document.addEventListener('navigate:calendar', () => showSection('calendar'));

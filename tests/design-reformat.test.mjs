@@ -95,6 +95,6 @@ test('format versions preserve rendered originals and keep the existing editor a
   assert.match(editor,/\['logo', preview\.querySelector\('#preview-logo'\), 'logo', 'Logo'\]/);
   assert.match(editor,/node\.dataset\.editorResizable = 'true'/);
   assert.match(html,/id="logo"/); assert.match(html,/id="create-reel-from-design"/);
-  assert.match(app,/previews: \[preview\]/); assert.match(app,/reel:use-rendered-designs/);
+  assert.match(app,/const currentPreview = cleanEditedPreview\(preview\)/); assert.match(app,/previews: \[currentPreview\]/); assert.match(app,/reel:use-rendered-designs/);
   assert.match(exporter,/canvas\.width = width/); assert.match(exporter,/canvas\.height = height/);
 });

@@ -244,6 +244,21 @@ app.post('/api/ai/refine-visual', (req, res, next) => aiImageUpload.single('imag
   finally { aiBusy = false; }
 });app.post('/api/reels/plan', async (req,res) => { const content=String(req.body?.content||'').trim(); const targetDuration=Number(req.body?.targetDuration||30); const style=String(req.body?.style||'educational'); if(!content) return failure(res,400,'INVALID_INPUT','Add Reel topic or content.'); try { const { planReel }=await import('./src/reel-planner.mjs'); res.json({ plan: await planReel({config,content,targetDuration,style}) }); } catch(error) { failure(res,502,'REEL_PLAN_FAILED',error?.message||'Reel planning failed.'); } });
 
+app.post('/api/reels/visual', async (req, res) => {
+  if (!checkRequest(req, res)) return;
+  const scene = req.body?.scene;
+  if (!scene || typeof scene !== 'object') return failure(res, 400, 'INVALID_INPUT', 'Choose a Reel scene.');
+  aiBusy = true;
+  try {
+    const { reelVisualPrompt } = await import('./src/reel-visuals.mjs');
+    const { mockPlan } = await import('./src/ai-design-director.mjs');
+    const { generateVisual } = await import('./src/openai-image.mjs');
+    const plan = mockPlan({ headline: String(scene.headline || 'Reel visual').slice(0, 180), supportingCopy: '', cta: '', customDirection: String(scene.visualDirection || '').slice(0, 600), visualStyle: 'editorial', subjectType: 'auto', composition: 'center' });
+    plan.imagePrompt = reelVisualPrompt(scene);
+    res.json(await generateVisual({ config, plan, quality: 'draft' }));
+  } catch (error) { reportError(res, error); }
+  finally { aiBusy = false; }
+});
 app.use('/api', (_req, res) => failure(res, 404, 'API_NOT_FOUND', 'This API endpoint is unavailable. Restart the local app and try again.'));
 // Only browser modules are public; server-only modules stay private.
 const browserSafeMjs = new Set(['/ai-plan.mjs', '/publishing-handoff.mjs', '/linkedin-carousel-document.mjs', '/reel-project.mjs', '/reel-planner.mjs', '/reel-design-adapter.mjs', '/reel-source-conversion.mjs']);

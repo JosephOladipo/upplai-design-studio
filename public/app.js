@@ -1283,11 +1283,36 @@ fetch('/api/ai/status', { signal: AbortSignal.timeout(5000) }).then(response => 
   updateControls();
 }).catch(() => { document.querySelector('#ai-status').textContent = 'AI status unavailable. Check the local server.'; });
 
-createReelFromDesign.addEventListener('click', () => {
-  if (!preview?.cloneNode) return;
-  document.dispatchEvent(new CustomEvent('reel:use-rendered-designs', {
-    detail: { title: 'Design Reel', previews: [preview] }
-  }));
+createReelFromDesign.addEventListener('click', async () => {
+  if (!preview?.cloneNode || !currentStyle || createReelFromDesign.disabled) return;
+  const value = state();
+  const currentPreview = cleanEditedPreview(preview);
+  const dimensions = canvasDimensions(preview);
+  setCanvasDimensions(currentPreview, dimensions);
+  createReelFromDesign.disabled = true;
+  status.textContent = 'Preparing the current design for your Reel…';
+  try {
+    // Reels is normally loaded with the app. Importing it here also covers a
+    // deferred module that has not attached its event listener yet.
+    await import('/reels.js');
+    const handoff = await new Promise((resolve, reject) => {
+      document.dispatchEvent(new CustomEvent('reel:use-rendered-designs', {
+        detail: {
+          title: value.headline || 'Design Reel',
+          previews: [currentPreview],
+          source: 'single-image-current-version',
+          dimensions,
+          completion: { resolve, reject }
+        }
+      }));
+    });
+    if (!handoff?.sceneCount) throw new Error('The current design could not be added to the Reel.');
+    status.textContent = 'Current design added to Reels.';
+  } catch (error) {
+    status.textContent = error.message || 'The current design could not be added to the Reel.';
+  } finally {
+    createReelFromDesign.disabled = false;
+  }
 });
 
 designReformat = setupDesignReformat({

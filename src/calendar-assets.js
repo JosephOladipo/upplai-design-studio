@@ -92,3 +92,9 @@ export async function saveReelUploadAsset(file, id = `reel-upload:${crypto.rando
   await transact('readwrite', store => store.put({ id, type: 'reel-upload', file })); return id;
 }
 export async function loadReelUploadAsset(id) { const asset=await loadCalendarAsset(id); return asset?.type==='reel-upload'?asset.file:null; }
+
+export async function saveReelRenderAsset(file, id = `reel-render:${crypto.randomUUID()}`) {
+  if (!(file instanceof Blob) || !file.size || file.type !== 'video/mp4') throw new Error('A completed MP4 video is required.');
+  await transact('readwrite', store => store.put({ id, type: 'reel-render', file })); return id;
+}
+export async function loadReelRenderAsset(id) { const asset = await loadCalendarAsset(id); return asset?.type === 'reel-render' ? asset.file : null; }

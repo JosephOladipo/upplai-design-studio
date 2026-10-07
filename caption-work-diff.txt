@@ -1,0 +1,301 @@
+diff --git a/public/index.html b/public/index.html
+index 609eb93..6edef42 100644
+--- a/public/index.html
++++ b/public/index.html
+@@ -567,6 +567,8 @@
+         Download PNG
+       </button>
+       <button id="edit-design" type="button" hidden>Edit Design</button>
++      <button id="save-calendar-design" type="button" hidden>Save to Calendar</button>
++      <button id="save-carousel-slide" type="button" hidden>Save Slide</button>
+       <div id="canvas-zoom-controls" class="canvas-zoom-controls" hidden><button id="canvas-fit" type="button">Fit</button><button id="canvas-zoom-out" type="button" aria-label="Zoom out">−</button><output id="canvas-zoom-value">Fit</output><button id="canvas-zoom-in" type="button" aria-label="Zoom in">+</button></div>
+       <section id="local-design-editor" class="local-design-editor" hidden><div class="editor-heading"><h3>Edit Design</h3><button id="reset-design-edits" type="button">Reset Edits</button></div><div id="local-editor-controls"></div></section>
+ 
+@@ -617,7 +619,7 @@
+       <div class="carousel-builder-head"><div><h2>Carousel Builder</h2><p class="hint">Build a connected 4:5 slide sequence.</p></div><button id="carousel-save-calendar" type="button">Save to Calendar</button><button id="carousel-new" type="button">New Carousel</button></div>
+       <div id="carousel-strip" class="carousel-strip" aria-label="Carousel slides"></div><button id="carousel-add" type="button">+ Add Slide</button>
+       <div class="carousel-workspace"><div><div id="carousel-preview" class="carousel-preview" aria-label="Carousel slide preview"></div><p id="carousel-warning" class="fit-warning" hidden>Shorten this slide for the best design.</p><div class="carousel-pagination"><button id="carousel-prev" type="button">Previous</button><button id="carousel-next" type="button">Next</button></div></div>
+-      <div class="carousel-editor"><h3 id="carousel-selected-label"></h3><label for="carousel-title">Carousel Title</label><input id="carousel-title" maxlength="180"><label for="carousel-description">Description / Context</label><textarea id="carousel-description" rows="3" maxlength="700"></textarea><label for="carousel-style">Carousel Style</label><select id="carousel-style"><option value="minimal-editorial">Minimal Editorial</option><option value="bold-cards">Bold Cards</option><option value="brand-gradient">Brand Gradient</option></select><label for="carousel-slide-headline">Headline</label><textarea id="carousel-slide-headline" rows="3" maxlength="180"></textarea><label for="carousel-slide-body">Body</label><textarea id="carousel-slide-body" rows="5" maxlength="700"></textarea><div id="carousel-slide-cta-wrap"><label for="carousel-slide-cta">CTA</label><input id="carousel-slide-cta" maxlength="70"></div><div class="carousel-actions"><button id="carousel-left" type="button">Move Left</button><button id="carousel-right" type="button">Move Right</button><button id="carousel-duplicate" type="button">Duplicate</button><button id="carousel-delete" type="button">Delete</button></div><button id="carousel-download-current" type="button">Download Current Slide</button><button id="carousel-download-all" type="button">Download All Slides</button></div></div>
++      <div class="carousel-editor"><h3 id="carousel-selected-label"></h3><label for="carousel-title">Carousel Title</label><input id="carousel-title" maxlength="180"><label for="carousel-description">Description / Context</label><textarea id="carousel-description" rows="3" maxlength="700"></textarea><label for="carousel-style">Carousel Style</label><select id="carousel-style"><option value="minimal-editorial">Minimal Editorial</option><option value="bold-cards">Bold Cards</option><option value="brand-gradient">Brand Gradient</option><option value="modern-magazine">Modern Magazine</option></select><label for="carousel-slide-headline">Headline</label><textarea id="carousel-slide-headline" rows="3" maxlength="180"></textarea><label for="carousel-slide-body">Body</label><textarea id="carousel-slide-body" rows="5" maxlength="700"></textarea><div id="carousel-slide-cta-wrap"><label for="carousel-slide-cta">CTA</label><input id="carousel-slide-cta" maxlength="70"></div><div class="carousel-actions"><button id="carousel-left" type="button">Move Left</button><button id="carousel-right" type="button">Move Right</button><button id="carousel-duplicate" type="button">Duplicate</button><button id="carousel-delete" type="button">Delete</button></div><button id="carousel-download-current" type="button">Download Current Slide</button><button id="carousel-download-all" type="button">Download All Slides</button></div></div>
+     </section>
+     <p
+       id="status"
+@@ -1040,6 +1042,12 @@
+         <div class="calendar-review-workspace">
+           <section class="calendar-review-preview-panel">
+             <div id="calendar-review-preview" class="review-preview-stage" aria-live="polite">Loading design…</div>
++            <div id="carousel-review-controls" class="carousel-review-controls" hidden>
++              <button id="carousel-review-previous" type="button">← Slide</button>
++              <span id="carousel-review-position" class="hint"></span>
++              <button id="carousel-review-next" type="button">Slide →</button>
++            </div>
++            <div id="carousel-review-strip" class="carousel-review-strip" hidden></div>
+           </section>
+         <aside class="calendar-review-details-panel">
+           <div id="calendar-review-meta"></div>
+@@ -1052,18 +1060,6 @@
+   <button id="edit-calendar-review" type="button">Edit Content</button>
+ </div>
+ 
+-<div id="calendar-review-design-editor" class="local-design-editor" hidden>
+-  <div class="local-editor-heading">
+-    <strong>Edit Design</strong>
+-    <button id="reset-calendar-design-edits" type="button">Reset Edits</button>
+-  </div>
+-
+-  <p class="hint">
+-    Changes happen instantly and do not use AI credits.
+-  </p>
+-
+-  <div id="calendar-review-editor-controls"></div>
+-</div>
+         </aside>
+       </div>
+     </section>
+@@ -1088,7 +1084,13 @@
+         <span id="publishing-media-badge" class="publishing-media-badge" hidden></span>
+         <button id="publishing-media-trigger" class="publishing-media-trigger" type="button">Add media</button>
+         <input id="publishing-media-input" type="file" accept="image/png,image/jpeg,image/webp,video/mp4">
+-        <label class="publishing-caption-label" for="publishing-caption">Caption<textarea id="publishing-caption" rows="7"></textarea></label>
++        <section class="publishing-copy-assistant" aria-label="Caption assistant">
++          <div class="publishing-caption-heading"><span>Caption</span><div class="publishing-mode-control caption-mode" role="group" aria-label="Caption mode"><button id="caption-mode-generic" type="button" class="active">One Caption for All</button><button id="caption-mode-platform" type="button">Platform-Specific</button></div></div>
++          <label id="publishing-generic-caption-label" class="publishing-caption-label" for="publishing-caption"><span>Caption</span><textarea id="publishing-caption" rows="7"></textarea></label>
++          <div id="publishing-platform-captions" hidden></div>
++          <details class="publishing-ai-assistant"><summary>✨ AI Assistant</summary><label>Tell AI how you want the caption<input id="publishing-ai-instruction" type="text" maxlength="600" placeholder="Optional direction, audience, or constraints"></label><div class="publishing-ai-controls"><label>Tone<select id="publishing-ai-tone"><option value="">Default</option><option value="professional">Professional</option><option value="conversational">Conversational</option><option value="bold">Bold</option><option value="educational">Educational</option><option value="friendly">Friendly</option></select></label><label>Length<select id="publishing-ai-length"><option value="short">Short</option><option value="medium" selected>Medium</option><option value="long">Long</option></select></label><label>Hashtags<select id="publishing-ai-hashtags"><option value="none">None</option><option value="few">Few</option><option value="more">More</option></select></label></div><div class="publishing-ai-actions"><button id="publishing-ai-generic" type="button">✨ Generate with AI</button><button id="publishing-ai-copy" type="button" hidden>Use Generic Caption for All</button><button id="publishing-ai-platform" type="button" hidden>Generate Platform Captions</button></div><p id="publishing-ai-status" class="hint" role="status"></p><div id="publishing-ai-results"></div></details>
++        </section>
++        <section class="publishing-alt-text" aria-label="Accessibility alt text"><div class="publishing-caption-heading"><span>Alt Text</span><div class="publishing-mode-control caption-mode" role="group" aria-label="Alt text mode"><button id="alt-mode-generic" type="button" class="active">One Alt Text for All</button><button id="alt-mode-platform" type="button">Platform-Specific</button></div></div><p class="hint">Describe the important visual content for accessibility. Buffer currently receives captions only; accessibility notes remain with this publishing draft.</p><label id="publishing-generic-alt-label" for="publishing-alt-text">Alt Text<textarea id="publishing-alt-text" rows="3" maxlength="500"></textarea></label><div id="publishing-platform-alt-text" hidden></div><button id="publishing-ai-alt" type="button">✨ Generate Alt Text</button><p id="publishing-alt-status" class="hint" role="status"></p></section>
+       </section>
+       <section class="publishing-settings-panel" aria-label="Publishing settings">
+         <div class="publishing-section-label">Publish</div>
+@@ -1120,4 +1122,4 @@
+ </main>
+ <script type="module" src="/publishing.js"></script>
+ </body>
+-</html>
+\ No newline at end of file
++</html>
+diff --git a/public/publishing.js b/public/publishing.js
+index 4363673..01235be 100644
+--- a/public/publishing.js
++++ b/public/publishing.js
+@@ -10,6 +10,13 @@ const state = {
+   existingMedia: null,
+   channels: new Set(),
+   channelLabels: new Map(),
++  channelData: new Map(),
++  captionMode: 'generic',
++  platformCaptions: {},
++  altTextMode: 'generic',
++  platformAltText: {},
++  slideAltText: [],
++  contentContext: {},
+   busy: false
+ };
+ 
+@@ -21,6 +28,7 @@ const mediaInput = q('publishing-media-input');
+ const mediaTrigger = q('publishing-media-trigger');
+ const mediaBadge = q('publishing-media-badge');
+ const modeSelect = q('publishing-mode');
++const altText = q('publishing-alt-text');
+ 
+ q('publishing-timezone').textContent = `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+ 
+@@ -30,6 +38,30 @@ function channelLabel(channel) {
+   return `${serviceName} — ${channel.name || 'Connected channel'}`;
+ }
+ 
++function selectedPlatforms() { return [...state.channels].map(id => ({ id, ...(state.channelData.get(id) || {}) })); }
++function assistantPayload(mode = state.captionMode) { return { mode, platforms: selectedPlatforms(), sourceCaption: caption.value, instruction: q('publishing-ai-instruction').value, controls: { tone: q('publishing-ai-tone').value, length: q('publishing-ai-length').value, hashtags: q('publishing-ai-hashtags').value }, context: state.contentContext }; }
++function button(id, text, action) { const value = document.createElement('button'); value.type = 'button'; value.textContent = text; value.onclick = action; return value; }
++function renderOptions(host, options, use) { host.replaceChildren(...options.map(option => { const card = document.createElement('article'); card.className = 'publishing-ai-option'; const label = document.createElement('strong'); label.textContent = option.label || 'Option'; const copy = document.createElement('p'); copy.textContent = option.text || ''; card.append(label, copy, button('', 'Use Caption', () => use(option.text || ''))); return card; })); }
++function renderCopyWorkspaces() {
++  const platformCaptions = q('publishing-platform-captions'); const platformAlt = q('publishing-platform-alt-text'); const selected = selectedPlatforms();
++  const platformMode = state.captionMode === 'platform'; const altMode = state.altTextMode === 'platform';
++  q('publishing-generic-caption-label').hidden = platformMode; platformCaptions.hidden = !platformMode;
++  q('publishing-generic-alt-label').hidden = altMode; platformAlt.hidden = !altMode;
++  q('publishing-ai-generic').hidden = platformMode; q('publishing-ai-copy').hidden = !platformMode; q('publishing-ai-platform').hidden = !platformMode;
++  q('caption-mode-generic').classList.toggle('active', !platformMode); q('caption-mode-platform').classList.toggle('active', platformMode);
++  q('alt-mode-generic').classList.toggle('active', !altMode); q('alt-mode-platform').classList.toggle('active', altMode);
++  if (platformMode) platformCaptions.replaceChildren(...selected.map(channel => { const wrap = document.createElement('label'); wrap.className = 'publishing-platform-copy'; const title = document.createElement('strong'); title.textContent = channelLabel(channel); const input = document.createElement('textarea'); input.rows = 4; input.value = state.platformCaptions[channel.id] || ''; input.oninput = () => { state.platformCaptions[channel.id] = input.value; }; wrap.append(title, input); return wrap; }));
++  if (altMode) platformAlt.replaceChildren(...selected.map(channel => { const wrap = document.createElement('label'); wrap.className = 'publishing-platform-copy'; const title = document.createElement('strong'); title.textContent = `${channelLabel(channel)} Alt Text`; const input = document.createElement('textarea'); input.rows = 3; input.maxLength = 500; input.value = state.platformAltText[channel.id] || ''; input.oninput = () => { state.platformAltText[channel.id] = input.value; }; wrap.append(title, input); return wrap; }));
++}
++async function generateAssistant(kind, platformOnly = false) {
++  const status = q(kind === 'caption' ? 'publishing-ai-status' : 'publishing-alt-status'); const trigger = q(kind === 'caption' ? (platformOnly ? 'publishing-ai-platform' : 'publishing-ai-generic') : 'publishing-ai-alt');
++  trigger.disabled = true; status.textContent = kind === 'caption' ? (platformOnly ? 'Generating platform variations…' : 'Generating caption options…') : 'Generating Alt Text…';
++  try { const response = await fetch(`/api/ai/generate-${kind === 'caption' ? 'caption' : 'alt-text'}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(assistantPayload(platformOnly ? 'platform' : state.captionMode)) }); const data = await response.json(); if (!response.ok) throw new Error(data.error?.message || 'AI generation failed.');
++    if (kind === 'caption') { const host = q('publishing-ai-results'); if (platformOnly) { host.replaceChildren(...selectedPlatforms().flatMap(channel => { const heading = document.createElement('h4'); heading.textContent = channelLabel(channel); const options = data.platformCaptions?.[channel.id] || []; const container = document.createElement('div'); renderOptions(container, options, text => { state.platformCaptions[channel.id] = text; renderCopyWorkspaces(); }); return [heading, container]; })); } else renderOptions(host, data.options || [], text => { caption.value = text; }); } else if (data.slideAltText) { state.slideAltText = data.slideAltText; status.textContent = 'Alt Text generated for all carousel slides.'; } else { altText.value = data.altText || ''; }
++    if (kind === 'caption') status.textContent = 'Caption options are ready. Choose one to use it.'; else if (!data.slideAltText) status.textContent = 'Alt Text is ready to edit.';
++  } catch (error) { status.textContent = error.message || 'AI generation failed. Your existing content is unchanged.'; } finally { trigger.disabled = false; }
++}
++
+ function setMediaState(source, message = 'Text-only post') {
+   state.mediaSource = source;
+   const labels = { manual: 'Uploaded media', generated: 'Generated design', 'existing-url': 'Existing media' };
+@@ -73,8 +105,9 @@ async function loadChannels() {
+       service.textContent = String(channel.service || 'Channel').replace(/^./, (letter) => letter.toUpperCase());
+       name.textContent = channel.name || 'Connected channel';
+       copy.append(service, name);
+-      input.onchange = () => input.checked ? state.channels.add(channel.id) : state.channels.delete(channel.id);
++      input.onchange = () => { input.checked ? state.channels.add(channel.id) : state.channels.delete(channel.id); renderCopyWorkspaces(); };
+       state.channelLabels.set(channel.id, channelLabel(channel));
++      state.channelData.set(channel.id, channel);
+       row.append(input, copy);
+       return row;
+     }));
+@@ -109,14 +142,25 @@ function reset() {
+   state.generatedPreview = null;
+   state.existingMedia = null;
+   state.channels.clear();
++  state.platformCaptions = {}; state.platformAltText = {}; state.slideAltText = []; state.contentContext = {};
+   caption.value = '';
++  altText.value = '';
+   mediaInput.value = '';
+   out.textContent = '';
+   q('publishing-channels').querySelectorAll('input').forEach((input) => { input.checked = false; });
+   setMediaState('none');
++  renderCopyWorkspaces();
+ }
+ 
+ q('publishing-new').onclick = reset;
++q('caption-mode-generic').onclick = () => { state.captionMode = 'generic'; renderCopyWorkspaces(); };
++q('caption-mode-platform').onclick = () => { state.captionMode = 'platform'; renderCopyWorkspaces(); };
++q('alt-mode-generic').onclick = () => { state.altTextMode = 'generic'; renderCopyWorkspaces(); };
++q('alt-mode-platform').onclick = () => { state.altTextMode = 'platform'; renderCopyWorkspaces(); };
++q('publishing-ai-generic').onclick = () => generateAssistant('caption');
++q('publishing-ai-platform').onclick = () => generateAssistant('caption', true);
++q('publishing-ai-copy').onclick = () => { selectedPlatforms().forEach(channel => { state.platformCaptions[channel.id] = caption.value; }); renderCopyWorkspaces(); };
++q('publishing-ai-alt').onclick = () => generateAssistant('alt');
+ mediaTrigger.onclick = () => mediaInput.click();
+ modeSelect.onchange = syncModeControl;
+ document.querySelectorAll('[data-publishing-mode]').forEach((control) => {
+@@ -143,7 +187,8 @@ mediaInput.onchange = (event) => {
+ 
+ button.onclick = async () => {
+   if (state.busy) return;
+-  if (!caption.value.trim() || !state.channels.size) {
++  const activeCaption = state.captionMode === 'platform' ? selectedPlatforms().some(channel => (state.platformCaptions[channel.id] || '').trim()) ? caption.value || 'Platform-specific post' : '' : caption.value;
++  if (!activeCaption.trim() || !state.channels.size) {
+     out.textContent = 'Add a caption and select at least one channel.';
+     return;
+   }
+@@ -173,7 +218,9 @@ button.onclick = async () => {
+       method: 'POST',
+       headers: { 'content-type': 'application/json' },
+       body: JSON.stringify({
+-        text: caption.value,
++        text: activeCaption,
++        ...(state.captionMode === 'platform' ? { channelTexts: Object.fromEntries(selectedPlatforms().map(channel => [channel.id, state.platformCaptions[channel.id] || caption.value]).filter(([, text]) => text.trim())) } : {}),
++        accessibility: { altTextMode: state.altTextMode, genericAltText: altText.value, platformAltText: state.platformAltText, carouselSlideAltText: state.slideAltText },
+         channelIds: [...state.channels],
+         mode: schedule ? 'customScheduled' : 'shareNow',
+         ...(dueAt ? { dueAt } : {}),
+@@ -206,6 +253,8 @@ document.addEventListener('publishing:generated', async (event) => {
+   state.existingMedia = null;
+   mediaInput.value = '';
+   caption.value = [result.headline, result.supportingCopy, result.cta].filter(Boolean).join('\n\n');
++  state.contentContext = { headline: result.headline || '', supportingCopy: result.supportingCopy || '', cta: result.cta || '', carousel: result.carousel || null, brand: { name: 'Upplai' } };
++  state.slideAltText = Array.isArray(result.carousel?.slides) ? result.carousel.slides.map(() => '') : [];
+ 
+   const asset = await loadCalendarAsset(result.resultRef);
+   if (!asset) {
+@@ -213,16 +262,17 @@ document.addEventListener('publishing:generated', async (event) => {
+     out.textContent = 'Generated design could not be loaded. Return to Design Review and regenerate it.';
+   } else {
+     const template = document.createElement('template');
+-    template.innerHTML = asset.html;
++    template.innerHTML = asset.type === 'carousel' ? asset.slides?.[0]?.html || '' : asset.html;
+     state.generatedPreview = template.content.firstElementChild;
+-    q('publishing-media').replaceChildren(state.generatedPreview.cloneNode(true));
+-    setMediaState('generated');
+-    out.textContent = 'Generated design ready for publishing.';
++    if (!state.generatedPreview) { setMediaState('none', 'Generated design could not be loaded. Return to Design Review and regenerate it.'); out.textContent = 'Generated design could not be loaded. Return to Design Review and regenerate it.'; }
++    else { q('publishing-media').replaceChildren(state.generatedPreview.cloneNode(true)); setMediaState('generated'); out.textContent = asset.type === 'carousel' ? 'Carousel design ready for publishing. The first slide is shown in this preview.' : 'Generated design ready for publishing.'; }
+   }
++  renderCopyWorkspaces();
+   document.dispatchEvent(new Event('navigate:publishing'));
+ });
+ 
+ syncModeControl();
++renderCopyWorkspaces();
+ loadChannels();
+ const management = q('publishing-management');
+ const composer = q('publishing-composer');
+@@ -301,4 +351,4 @@ function showPublishingTab(tab) {
+   if (tab !== 'composer') { managementStatusName = tab === 'scheduled' ? 'scheduled' : 'sent'; q('publishing-management-title').textContent = tab === 'scheduled' ? 'Scheduled' : 'Published'; loadManagement(); }
+ }
+ document.querySelectorAll('[data-publishing-tab]').forEach(button => { button.onclick = () => showPublishingTab(button.dataset.publishingTab); });
+-q('publishing-management-refresh').onclick = loadManagement;
+\ No newline at end of file
++q('publishing-management-refresh').onclick = loadManagement;
+diff --git a/public/styles.css b/public/styles.css
+index f0980fa..2b88101 100644
+--- a/public/styles.css
++++ b/public/styles.css
+@@ -593,6 +593,7 @@ main,#section-publishing{width:calc(100vw - var(--sidebar-width));max-width:1500
+ /* Phase 14 — carousel builder */
+ .content-type-toggle,.carousel-strip,.carousel-actions,.carousel-pagination{display:flex;gap:.55rem;flex-wrap:wrap}.content-type-toggle{margin:1rem 0}.content-type-toggle button.active,.carousel-tab.active{background:var(--primary);color:var(--navy)}
+ .carousel-builder{grid-column:1/-1;margin-top:1rem}.carousel-builder-head{display:flex;justify-content:space-between;gap:1rem;align-items:start}.carousel-workspace{display:grid;grid-template-columns:minmax(280px,.95fr) minmax(300px,.8fr);gap:2rem;margin-top:1.25rem}.carousel-preview{width:min(100%,440px);aspect-ratio:4/5;margin:auto;overflow:hidden;background:var(--navy);box-shadow:0 18px 45px rgba(0,0,0,.25)}.carousel-slide{width:1080px;height:1350px;transform:scale(calc(min(440px, 100vw - 5rem)/1080));transform-origin:top left;position:relative;box-sizing:border-box;padding:110px;display:flex;flex-direction:column;color:var(--carousel-text);font-family:var(--carousel-body);background:var(--carousel-light)}.carousel-slide h2{font:800 88px/1.02 var(--carousel-heading);margin:0 0 35px;max-width:780px}.carousel-slide p{font-size:34px;line-height:1.4;max-width:720px;margin:0}.carousel-copy{margin:auto 0}.carousel-progress{font:700 22px/1 var(--carousel-body);letter-spacing:.13em;color:var(--carousel-primary)}.carousel-brand{position:absolute;bottom:90px;right:100px}.carousel-logo{max-width:180px;max-height:60px;object-fit:contain}.carousel-logo-text{font:800 32px/1 var(--carousel-heading);color:var(--carousel-primary)}.carousel-cta{display:inline-block;margin-top:45px;padding:18px 32px;border-radius:999px;background:var(--carousel-primary);color:var(--carousel-text);font-weight:800}.carousel-content .carousel-copy{margin:215px 0 auto}.carousel-cta .carousel-copy{margin:auto 0 160px}.carousel-bold-cards{background:var(--carousel-text);color:var(--carousel-light)}.carousel-bold-cards .carousel-progress,.carousel-bold-cards .carousel-logo-text{color:var(--carousel-secondary)}.carousel-bold-cards:after{content:"";position:absolute;width:560px;height:560px;border-radius:50%;background:var(--carousel-primary);right:-210px;top:-190px}.carousel-bold-cards .carousel-copy{position:relative;z-index:1}.carousel-brand-gradient{background:linear-gradient(145deg,var(--carousel-primary),var(--carousel-secondary) 55%,var(--carousel-accent));color:var(--carousel-text)}.carousel-brand-gradient .carousel-progress{color:var(--carousel-text)}.carousel-editor label{display:block;margin-top:.8rem}.carousel-editor input,.carousel-editor textarea,.carousel-editor select{width:100%;box-sizing:border-box}.carousel-editor>button{margin-top:.8rem}.fit-warning{color:#f7b6b6;font-weight:700}
++.carousel-slide{overflow:hidden}.carousel-slide:before{content:"";position:absolute;inset:54px;border:2px solid color-mix(in srgb,var(--carousel-primary) 25%,transparent);pointer-events:none}.carousel-cover .carousel-copy{margin:250px 0 auto}.carousel-context .carousel-copy{margin:190px 0 auto;padding:54px;background:color-mix(in srgb,var(--carousel-primary) 10%,transparent);border-radius:32px}.carousel-insight h2,.carousel-stat h2{font-size:116px;max-width:860px}.carousel-list .carousel-copy{margin:160px 0 auto}.carousel-list .carousel-copy:before{content:"01  02  03";display:block;margin-bottom:42px;font:800 28px/1 var(--carousel-body);letter-spacing:.18em;color:var(--carousel-accent)}.carousel-visual .carousel-copy{margin:auto 0 130px;max-width:610px}.carousel-visual:after{content:"";position:absolute;width:600px;height:600px;right:-170px;top:210px;border-radius:48px;background:linear-gradient(135deg,var(--carousel-secondary),var(--carousel-accent));transform:rotate(18deg)}.carousel-visual .carousel-copy{position:relative;z-index:1}.carousel-stat .carousel-copy{margin:300px 0 auto;padding-left:42px;border-left:12px solid var(--carousel-accent)}.carousel-conclusion .carousel-copy{margin:auto 0 210px}.carousel-conclusion h2{font-size:102px}.carousel-cta .carousel-copy{margin:auto 0 170px}.carousel-cta:before{border-color:color-mix(in srgb,var(--carousel-light) 45%,transparent)}.carousel-modern-magazine{background:#f5f0e7;color:var(--carousel-text)}.carousel-modern-magazine:after{content:"";position:absolute;width:420px;height:880px;right:70px;top:170px;background:var(--carousel-accent);opacity:.14;transform:rotate(14deg)}.carousel-modern-magazine .carousel-copy{position:relative;z-index:1;max-width:690px}.carousel-modern-magazine h2{font-family:Georgia,serif;letter-spacing:-.055em}.carousel-modern-magazine .carousel-progress{color:var(--carousel-accent)}
+ @media(max-width:760px){.carousel-workspace{grid-template-columns:1fr}.carousel-builder-head{display:block}.carousel-builder-head button{margin-top:.75rem}.carousel-preview{width:min(100%,360px)}.carousel-slide{transform:scale(calc(min(360px, 100vw - 3rem)/1080))}}
+ 
+ .calendar-format-badge{display:inline-flex;padding:.2rem .48rem;border:1px solid color-mix(in srgb,var(--primary) 50%,transparent);border-radius:999px;font-size:.75rem;font-weight:700;white-space:nowrap}.carousel-strip{flex-wrap:nowrap;overflow-x:auto;padding:.2rem 0}.carousel-tab{flex:0 0 auto;width:auto;min-width:76px;padding:.45rem .6rem}.carousel-pagination button,.carousel-actions button{width:auto;padding:.48rem .7rem}.carousel-builder-head{flex-wrap:wrap}
+@@ -630,4 +631,4 @@ main,#section-publishing{width:calc(100vw - var(--sidebar-width));max-width:1500
+     flex: none !important;
+     margin: 0 !important;
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/server.js b/server.js
+index bf4238a..5adf1ee 100644
+--- a/server.js
++++ b/server.js
+@@ -29,7 +29,7 @@ let aiBusy = false;
+ const plans = new Map(); // Short-lived local plans; never persistent content storage.
+ app.use(express.json({ limit: '32kb' }));
+ app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: 'Upplai Design Studio', bufferConfigured: Boolean(process.env.BUFFER_API_KEY), cloudinaryConfigured: Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) }));
+-app.post('/api/publishing/posts', async (req,res) => { const body=req.body||{}; const validMode=['shareNow','customScheduled'].includes(body.mode); if(!process.env.BUFFER_API_KEY)return failure(res,503,'NOT_CONFIGURED','Buffer is not configured on this server.'); if(!validMode||!Array.isArray(body.channelIds)||!body.channelIds.length||typeof body.text!=='string'||!body.text.trim())return failure(res,400,'INVALID_INPUT','Add content and select at least one channel.'); if(body.mode==='customScheduled'&&(!body.dueAt||Number.isNaN(Date.parse(body.dueAt))||Date.parse(body.dueAt)<=Date.now()))return failure(res,400,'INVALID_SCHEDULE','Choose a future schedule time.'); try { const { publishPosts }=await import('./src/buffer-publish.mjs'); const results=await publishPosts({apiKey:process.env.BUFFER_API_KEY,text:body.text.trim(),channelIds:body.channelIds,mode:body.mode,dueAt:body.mode==='customScheduled'?body.dueAt:undefined,media:body.media});res.json({published:results.some(x=>x.success),results}); } catch { failure(res,502,'BUFFER_FAILED','Buffer publishing failed.'); }});app.get('/api/buffer/posts', async (req, res) => { const status = req.query.status; if (!['scheduled','sent'].includes(status)) return failure(res,400,'INVALID_INPUT','Choose scheduled or sent posts.'); try { const { getBufferOrganizations } = await import('./src/buffer.mjs'); const { listBufferPosts } = await import('./src/buffer-posts.mjs'); const organizations = await getBufferOrganizations({ apiKey: process.env.BUFFER_API_KEY }); const posts = await listBufferPosts({ apiKey: process.env.BUFFER_API_KEY, status, organizationIds: organizations.map(item => item.id) }); res.json({ posts }); } catch (error) { failure(res,error?.code === 'NOT_CONFIGURED' ? 503 : error?.code === 'AUTH' ? 401 : 502,error?.code || 'BUFFER_FAILED',error?.message || 'Buffer posts are unavailable.'); } });
++app.post('/api/publishing/posts', async (req,res) => { const body=req.body||{}; const validMode=['shareNow','customScheduled'].includes(body.mode); const channelTexts=body.channelTexts&&typeof body.channelTexts==='object'&&!Array.isArray(body.channelTexts)?Object.fromEntries(Object.entries(body.channelTexts).filter(([id,text])=>typeof id==='string'&&id.length<160&&typeof text==='string'&&text.trim()&&text.length<=8000).map(([id,text])=>[id,text.trim()])):{}; if(!process.env.BUFFER_API_KEY)return failure(res,503,'NOT_CONFIGURED','Buffer is not configured on this server.'); if(!validMode||!Array.isArray(body.channelIds)||!body.channelIds.length||typeof body.text!=='string'||!body.text.trim())return failure(res,400,'INVALID_INPUT','Add content and select at least one channel.'); if(body.mode==='customScheduled'&&(!body.dueAt||Number.isNaN(Date.parse(body.dueAt))||Date.parse(body.dueAt)<=Date.now()))return failure(res,400,'INVALID_SCHEDULE','Choose a future schedule time.'); try { const { publishPosts }=await import('./src/buffer-publish.mjs'); const results=await publishPosts({apiKey:process.env.BUFFER_API_KEY,text:body.text.trim(),channelTexts,channelIds:body.channelIds,mode:body.mode,dueAt:body.mode==='customScheduled'?body.dueAt:undefined,media:body.media});res.json({published:results.some(x=>x.success),results}); } catch { failure(res,502,'BUFFER_FAILED','Buffer publishing failed.'); }});app.get('/api/buffer/posts', async (req, res) => { const status = req.query.status; if (!['scheduled','sent'].includes(status)) return failure(res,400,'INVALID_INPUT','Choose scheduled or sent posts.'); try { const { getBufferOrganizations } = await import('./src/buffer.mjs'); const { listBufferPosts } = await import('./src/buffer-posts.mjs'); const organizations = await getBufferOrganizations({ apiKey: process.env.BUFFER_API_KEY }); const posts = await listBufferPosts({ apiKey: process.env.BUFFER_API_KEY, status, organizationIds: organizations.map(item => item.id) }); res.json({ posts }); } catch (error) { failure(res,error?.code === 'NOT_CONFIGURED' ? 503 : error?.code === 'AUTH' ? 401 : 502,error?.code || 'BUFFER_FAILED',error?.message || 'Buffer posts are unavailable.'); } });
+ app.post('/api/buffer/posts/:id/reschedule', async (req,res) => { const dueAt=req.body?.dueAt; if(!dueAt || Number.isNaN(Date.parse(dueAt)) || Date.parse(dueAt)<=Date.now()) return failure(res,400,'INVALID_SCHEDULE','Choose a future schedule time.'); try { const { getBufferOrganizations }=await import('./src/buffer.mjs'); const { listBufferPosts, rescheduleBufferPost }=await import('./src/buffer-posts.mjs'); const organizations=await getBufferOrganizations({apiKey:process.env.BUFFER_API_KEY}); const scheduled=await listBufferPosts({apiKey:process.env.BUFFER_API_KEY,status:'scheduled',organizationIds:organizations.map(item=>item.id)}); if(!scheduled.some(post=>post.id===req.params.id)) return failure(res,404,'NOT_FOUND','This scheduled post is no longer available.'); await rescheduleBufferPost({apiKey:process.env.BUFFER_API_KEY,id:req.params.id,dueAt}); res.json({updated:true}); } catch(error) { failure(res,error?.code==='NOT_CONFIGURED'?503:error?.code==='AUTH'?401:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer could not reschedule this post.'); } });
+ app.delete('/api/buffer/posts/:id', async (req,res) => { try { const { getBufferOrganizations }=await import('./src/buffer.mjs'); const { listBufferPosts, deleteBufferPost }=await import('./src/buffer-posts.mjs'); const organizations=await getBufferOrganizations({apiKey:process.env.BUFFER_API_KEY}); const scheduled=await listBufferPosts({apiKey:process.env.BUFFER_API_KEY,status:'scheduled',organizationIds:organizations.map(item=>item.id)}); if(!scheduled.some(post=>post.id===req.params.id)) return failure(res,404,'NOT_FOUND','This scheduled post is no longer available.'); await deleteBufferPost({apiKey:process.env.BUFFER_API_KEY,id:req.params.id}); res.json({deleted:true}); } catch(error) { failure(res,error?.code==='NOT_CONFIGURED'?503:error?.code==='AUTH'?401:502,error?.code||'BUFFER_FAILED',error?.message||'Buffer could not cancel this post.'); } });app.get('/api/buffer/channels', async (_req, res) => { try { const { getBufferChannels, BufferError } = await import('./src/buffer.mjs'); const channels = await getBufferChannels({ apiKey: process.env.BUFFER_API_KEY }); res.json({ connected: true, channels }); } catch (error) { const status = error?.code === 'NOT_CONFIGURED' ? 503 : error?.code === 'AUTH' ? 401 : 502; failure(res, status, error?.code || 'BUFFER_FAILED', error?.message || 'Buffer connection failed.'); } });
+ function mediaFailure(error, file) {
+@@ -81,6 +81,23 @@ function reportError(res, error) {
+       : 'Generation failed or returned invalid data. Check the local server console for details.'
+   );
+ }
++function validAssistantBody(value) {
++  if (!value || typeof value !== 'object') return false;
++  const textFields = [value.sourceCaption, value.instruction, value.context?.headline, value.context?.supportingCopy, value.context?.cta];
++  return textFields.every(field => field === undefined || (typeof field === 'string' && field.length <= 4000));
++}
++async function assistantRoute(req, res, type) {
++  if (!checkRequest(req, res) || !validAssistantBody(req.body)) return;
++  aiBusy = true;
++  try {
++    const { generateCaptionOptions, generateAltText } = await import('./src/content-assistant.mjs');
++    const result = type === 'caption' ? await generateCaptionOptions({ config, input: req.body }) : await generateAltText({ config, input: req.body });
++    res.json({ ...result, mockMode: config.mockMode });
++  } catch (error) { reportError(res, error); }
++  finally { aiBusy = false; }
++}
++app.post('/api/ai/generate-caption', (req, res) => assistantRoute(req, res, 'caption'));
++app.post('/api/ai/generate-alt-text', (req, res) => assistantRoute(req, res, 'alt'));
+ app.post('/api/ai/design-plan', async (req, res) => {
+   if (!checkRequest(req, res)) return;
+   aiBusy = true;
+@@ -134,5 +151,3 @@ if (require.main === module) app.listen(port, '0.0.0.0', () => {
+   console.log(config.mockMode ? 'Mock Mode — No API Usage' : 'OpenAI live mode: requests only after an explicit generation action.');
+ });
+ module.exports = app;
+-
+-
+diff --git a/src/buffer-publish.mjs b/src/buffer-publish.mjs
+index c323707..f6d07ba 100644
+--- a/src/buffer-publish.mjs
++++ b/src/buffer-publish.mjs
+@@ -1,3 +1,3 @@
+ import { getBufferChannels } from './buffer.mjs';
+ const safeMessage = value => String(value || '').replace(/[\r\n]+/g, ' ').slice(0, 180);
+-export async function publishPosts({apiKey,text,channelIds,mode,dueAt,media,fetcher=fetch}) { const channels=await getBufferChannels({apiKey,fetcher}); const channelById=new Map(channels.map(c=>[c.id,c])); const results=[]; for(const channelId of channelIds){ if(!channelById.has(channelId)){results.push({channelId,success:false,error:'Selected channel is unavailable.'});continue;} const channel=channelById.get(channelId); const metadata=channel.service === 'facebook' ? { facebook: { type: 'post' } } : undefined; const assets=media?.url?[media.resourceType==='video'?{video:{url:media.url}}:{image:{url:media.url}}]:undefined; const query=`mutation CreatePost($input: CreatePostInput!) { createPost(input: $input) { ... on PostActionSuccess { post { id status dueAt } } ... on MutationError { message } } }`; const input={text,channelId,schedulingType:'automatic',mode,...(dueAt?{dueAt}:{}),...(assets?{assets}:{}),...(metadata?{metadata}:{})}; try{const r=await fetcher('https://api.buffer.com',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${apiKey}`},body:JSON.stringify({query,variables:{input}})});const body=await r.json();const value=body.data?.createPost;const graphqlErrors=(body.errors||[]).map(e=>safeMessage(e.message)).filter(Boolean);const mutationError=safeMessage(value?.message);if(!r.ok||graphqlErrors.length||!value?.post){const message=graphqlErrors[0]||mutationError||'Buffer could not create this post.';console.error('[Buffer Publish Error]',{status:r.status,channelId,mode,hasDueAt:Boolean(dueAt),hasMedia:Boolean(media?.url),mediaType:media?.resourceType||null,graphqlErrors,mutationError:mutationError||null,responseData:value?{typename:value.__typename||null,hasPost:Boolean(value.post)}:null});results.push({channelId,success:false,error:message});continue;}results.push({channelId,success:true,postId:value.post.id,status:value.post.status,dueAt:value.post.dueAt||dueAt||null});}catch(error){console.error('[Buffer Publish Error]',{status:error?.status||0,channelId,mode,hasDueAt:Boolean(dueAt),hasMedia:Boolean(media?.url),mediaType:media?.resourceType||null,graphqlErrors:[],mutationError:safeMessage(error?.message)||null,responseData:null});results.push({channelId,success:false,error:safeMessage(error?.message)||'Buffer could not create this post.'});}} return results; }
+\ No newline at end of file
++export async function publishPosts({apiKey,text,channelTexts={},channelIds,mode,dueAt,media,fetcher=fetch}) { const channels=await getBufferChannels({apiKey,fetcher}); const channelById=new Map(channels.map(c=>[c.id,c])); const results=[]; for(const channelId of channelIds){ if(!channelById.has(channelId)){results.push({channelId,success:false,error:'Selected channel is unavailable.'});continue;} const channel=channelById.get(channelId); const metadata=channel.service === 'facebook' ? { facebook: { type: 'post' } } : undefined; const assets=media?.url?[media.resourceType==='video'?{video:{url:media.url}}:{image:{url:media.url}}]:undefined; const query=`mutation CreatePost($input: CreatePostInput!) { createPost(input: $input) { ... on PostActionSuccess { post { id status dueAt } } ... on MutationError { message } } }`; const channelText=typeof channelTexts[channelId]==='string'&&channelTexts[channelId].trim()?channelTexts[channelId].trim():text; const input={text:channelText,channelId,schedulingType:'automatic',mode,...(dueAt?{dueAt}:{}),...(assets?{assets}:{}),...(metadata?{metadata}:{})}; try{const r=await fetcher('https://api.buffer.com',{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${apiKey}`},body:JSON.stringify({query,variables:{input}})});const body=await r.json();const value=body.data?.createPost;const graphqlErrors=(body.errors||[]).map(e=>safeMessage(e.message)).filter(Boolean);const mutationError=safeMessage(value?.message);if(!r.ok||graphqlErrors.length||!value?.post){const message=graphqlErrors[0]||mutationError||'Buffer could not create this post.';console.error('[Buffer Publish Error]',{status:r.status,channelId,mode,hasDueAt:Boolean(dueAt),hasMedia:Boolean(media?.url),mediaType:media?.resourceType||null,graphqlErrors,mutationError:mutationError||null,responseData:value?{typename:value.__typename||null,hasPost:Boolean(value.post)}:null});results.push({channelId,success:false,error:message});continue;}results.push({channelId,success:true,postId:value.post.id,status:value.post.status,dueAt:value.post.dueAt||dueAt||null});}catch(error){console.error('[Buffer Publish Error]',{status:error?.status||0,channelId,mode,hasDueAt:Boolean(dueAt),hasMedia:Boolean(media?.url),mediaType:media?.resourceType||null,graphqlErrors:[],mutationError:safeMessage(error?.message)||null,responseData:null});results.push({channelId,success:false,error:safeMessage(error?.message)||'Buffer could not create this post.'});}} return results; }
