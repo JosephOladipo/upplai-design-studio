@@ -13,6 +13,7 @@
 <script type="module" src="/brand-kit-ui.js"></script>
 <script type="module" src="/calendar.js"></script>
 <script type="module" src="/calendar-table.js"></script>
+<script type="module" src="/ai-designer.js"></script>
 </head>
 
 <body>
@@ -86,6 +87,7 @@
         <button type="button" class="active" data-content-type="single">Single Image</button>
         <button type="button" data-content-type="multi-page">Multi-Page</button>
         <button type="button" data-content-type="carousel">Carousel</button>
+        <button type="button" data-content-type="ai-designer">AI Designer</button>
       </div>
 
       <form id="generator">
@@ -472,6 +474,14 @@
         </button>
 
       </form>
+
+      <section id="ai-designer-panel" class="ai-designer-panel" hidden aria-labelledby="ai-designer-title">
+        <h2 id="ai-designer-title">AI Designer</h2><p class="hint">Paste your message and let AI choose a readable format, copy hierarchy, and generation route.</p>
+        <label for="ai-designer-copy">Your copy<textarea id="ai-designer-copy" rows="7" maxlength="8000" placeholder="Paste the message, offer, or notes you want to turn into a design."></textarea></label>
+        <label for="ai-designer-direction">Creative direction (optional)<textarea id="ai-designer-direction" rows="3" maxlength="1200" placeholder="Audience, mood, campaign context, or visual direction"></textarea></label>
+        <div class="ai-designer-grid"><label>Output format<select id="ai-designer-format"><option value="auto">Auto</option><option value="single_image">Single image</option><option value="carousel">Carousel</option><option value="multi_page">Multi-page</option></select></label><label>Text mode<select id="ai-designer-text-mode"><option value="auto">Auto</option><option value="native">Native text</option><option value="full_ai">Full AI artwork</option></select></label><label>Font style<select id="ai-designer-font-style"><option value="auto">Auto</option><option value="modern_sans">Modern sans</option><option value="bold_editorial">Bold editorial</option><option value="clean_minimal">Clean minimal</option><option value="tech">Tech</option><option value="premium">Premium</option><option value="friendly_rounded">Friendly rounded</option><option value="corporate_sharp">Corporate sharp</option><option value="social_punchy">Social punchy</option></select></label><label>Pages / slides<select id="ai-designer-page-count"><option value="0">Auto</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option><option value="10">10</option></select></label><label>CTA<select id="ai-designer-cta"><option value="auto">Auto</option><option value="keep">Keep supplied CTA</option><option value="rewrite">Rewrite CTA</option><option value="generate">Generate CTA</option><option value="none">No CTA</option></select></label><label>Rewrite strength<select id="ai-designer-rewrite"><option value="minimal">Minimal</option><option value="balanced" selected>Balanced</option><option value="strong">Strong</option></select></label></div>
+        <div class="saved-prompt-controls" aria-label="Saved AI Designer prompts"><strong>Saved prompts</strong><select id="ai-designer-prompt-select"><option value="">Select saved prompt</option></select><button id="ai-designer-prompt-save" type="button">Save</button><button id="ai-designer-prompt-delete" type="button">Delete</button></div><button id="ai-designer-generate" type="button">✨ Create design</button><p id="ai-designer-status" class="hint" role="status"></p><div id="ai-designer-plan" class="ai-designer-plan" hidden></div>
+      </section>
 
     </section>
 

@@ -169,6 +169,16 @@ app.post('/api/ai/generate-multi-page-content', async (req, res) => {
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
 });
+app.post('/api/ai/ai-designer-plan', async (req, res) => {
+  if (!checkRequest(req, res)) return;
+  aiBusy = true;
+  try {
+    const { planAiDesigner } = await import('./src/ai-designer-planner.mjs');
+    const plan = await planAiDesigner({ config, input: req.body });
+    res.json({ plan, mockMode: config.mockMode });
+  } catch (error) { reportError(res, error); }
+  finally { aiBusy = false; }
+});
 app.post('/api/ai/design-plan', async (req, res) => {
   if (!checkRequest(req, res)) return;
   aiBusy = true;
