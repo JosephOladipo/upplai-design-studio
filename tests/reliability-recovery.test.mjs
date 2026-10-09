@@ -20,7 +20,7 @@ test('workspace and publishing recovery retain only asset references, never brow
   const publishing = await file('public/publishing.js');
   const carousel = await file('public/carousel.js');
   assert.match(navigation, /upplai-design-studio-active-workspace/);
-  assert.match(navigation, /showSection\(restoredWorkspace, \{ history: false \}\)/);
+  assert.match(navigation, /navigateToWorkspace\(restoredWorkspace, \{ history: false \}\)/);
   assert.match(publishing, /upplai-design-studio-publishing-draft/);
   assert.match(publishing, /generatedRef/);
   const draft = publishing.match(/function savePublishingDraft\(\)[\s\S]*?\n\}/)?.[0] || '';

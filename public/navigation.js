@@ -33,7 +33,7 @@ let applyingHistory = false;
 const validWorkspaces = new Set(['home', 'create', 'brand', 'calendar', 'review', 'publishing','reels']);
 
 
-function showSection(section, { history = true } = {}) {
+export function navigateToWorkspace(section, { history = true } = {}) {
   section = validWorkspaces.has(section) ? section : 'create';
   const sections = {
     home: [homeButton, homeSection],
@@ -59,38 +59,39 @@ function showSection(section, { history = true } = {}) {
 
 createButton.addEventListener(
   'click',
-  () => showSection('create')
+  () => navigateToWorkspace('create')
 );
-homeButton.addEventListener('click', () => showSection('home'));
+homeButton.addEventListener('click', () => navigateToWorkspace('home'));
 
 
 brandButton.addEventListener(
   'click',
-  () => showSection('brand')
+  () => navigateToWorkspace('brand')
 );
 
 calendarButton.addEventListener(
   'click',
-  () => showSection('calendar')
+  () => navigateToWorkspace('calendar')
 );
-reviewButton.addEventListener('click', () => showSection('review'));
-publishingButton.addEventListener('click', () => showSection('publishing'));
-reelsButton.addEventListener('click', () => showSection('reels'));
+reviewButton.addEventListener('click', () => navigateToWorkspace('review'));
+publishingButton.addEventListener('click', () => navigateToWorkspace('publishing'));
+reelsButton.addEventListener('click', () => navigateToWorkspace('reels'));
 mobileNavToggle?.addEventListener('click', () => {
   const open = document.body.classList.toggle('mobile-nav-open');
   mobileNavToggle.setAttribute('aria-expanded', String(open));
 });
-document.addEventListener('navigate:publishing', () => showSection('publishing'));
-document.addEventListener('navigate:review', () => showSection('review'));
-document.addEventListener('navigate:calendar', () => showSection('calendar'));
-document.addEventListener('navigate:create', () => showSection('create'));
-document.addEventListener('navigate:reels', () => showSection('reels'));
+document.addEventListener('navigate:workspace', event => navigateToWorkspace(event.detail?.workspace));
+document.addEventListener('navigate:publishing', () => navigateToWorkspace('publishing'));
+document.addEventListener('navigate:review', () => navigateToWorkspace('review'));
+document.addEventListener('navigate:calendar', () => navigateToWorkspace('calendar'));
+document.addEventListener('navigate:create', () => navigateToWorkspace('create'));
+document.addEventListener('navigate:reels', () => navigateToWorkspace('reels'));
 backButton.addEventListener('click', () => window.history.back());
-window.addEventListener('popstate', event => { applyingHistory = true; showSection(event.state?.workspace || 'create', { history: false }); applyingHistory = false; }); 
+window.addEventListener('popstate', event => { applyingHistory = true; navigateToWorkspace(event.state?.workspace || 'create', { history: false }); applyingHistory = false; });
 
 
 // Restore the last valid workspace; Create is the safe fallback.
 let restoredWorkspace = 'create';
 try { restoredWorkspace = localStorage.getItem(WORKSPACE_KEY) || 'create'; } catch { /* use fallback */ }
 window.history.replaceState({ workspace: restoredWorkspace }, '', '#' + restoredWorkspace);
-showSection(restoredWorkspace, { history: false });
+navigateToWorkspace(restoredWorkspace, { history: false });

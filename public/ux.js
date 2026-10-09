@@ -18,11 +18,12 @@ if (generator && !$('create-advanced-controls')) {
 document.querySelectorAll('details').forEach(detail => { if (detail.id) rememberDetails(detail); });
 const more = $('mobile-more-menu'), moreToggle = $('mobile-more-toggle');
 moreToggle?.addEventListener('click', () => { const open = more.hidden; more.hidden = !open; moreToggle.setAttribute('aria-expanded', String(open)); });
-document.querySelectorAll('[data-mobile-workspace]').forEach(button => button.addEventListener('click', () => { const id = `nav-${button.dataset.mobileWorkspace}`; $(id)?.click(); if (more) more.hidden = true; moreToggle?.setAttribute('aria-expanded', 'false'); }));
+function navigateWorkspace(workspace) { document.dispatchEvent(new CustomEvent('navigate:workspace', { detail: { workspace } })); if (more) more.hidden = true; moreToggle?.setAttribute('aria-expanded', 'false'); }
+document.querySelectorAll('[data-mobile-workspace]').forEach(button => button.addEventListener('click', () => navigateWorkspace(button.dataset.mobileWorkspace)));
 document.addEventListener('workspace:changed', event => { const workspace = event.detail?.workspace; document.querySelectorAll('[data-mobile-workspace]').forEach(button => button.classList.toggle('active', button.dataset.mobileWorkspace === workspace)); });
 const createWorkspace = $('section-create');
 function setCreateView(view) { if (!createWorkspace) return; createWorkspace.dataset.mobileView = view; document.querySelectorAll('[data-create-view]').forEach(button => { const active = button.dataset.createView === view; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); }
 document.querySelectorAll('[data-create-view]').forEach(button => button.addEventListener('click', () => setCreateView(button.dataset.createView)));
 setCreateView('edit');
-document.querySelectorAll('[data-home-workspace]').forEach(button => button.addEventListener('click', () => $("nav-" + button.dataset.homeWorkspace)?.click()));
-document.querySelectorAll('[data-home-create]').forEach(button => button.addEventListener('click', () => { $('nav-create')?.click(); document.querySelector(`[data-content-type="${button.dataset.homeCreate}"]`)?.click(); setCreateView('edit'); }));
+document.querySelectorAll('[data-home-workspace]').forEach(button => button.addEventListener('click', () => navigateWorkspace(button.dataset.homeWorkspace)));
+document.querySelectorAll('[data-home-create]').forEach(button => button.addEventListener('click', () => { navigateWorkspace('create'); document.querySelector(`[data-content-type="${button.dataset.homeCreate}"]`)?.click(); setCreateView('edit'); }));

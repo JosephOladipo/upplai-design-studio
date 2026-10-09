@@ -795,3 +795,12 @@ html,body{max-width:100%;overflow-x:clip}img,video,canvas{max-width:100%}button,
 .reel-start{display:grid;gap:10px}.reel-start h2{margin:0}.reel-start-options{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(132px,1fr))!important;gap:8px!important}.reel-start-options button{width:100%!important;min-height:42px}.reel-start-image-options{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:10px!important}.reel-start-image-options label{display:grid;gap:5px;margin:0}.reel-advanced{margin-top:12px;border-top:1px solid var(--ui-border);padding-top:10px}.reel-advanced summary{cursor:pointer;font-weight:600}.reel-advanced #reel-controls{margin-top:12px}
 @media(max-width:760px){.reel-start-options{grid-template-columns:1fr 1fr!important}.reel-start-image-options{grid-template-columns:1fr!important}.reel-advanced summary{min-height:44px;display:flex;align-items:center}.reel-selected-summary{line-height:1.45}}
 @media(max-width:380px){.reel-start-options{grid-template-columns:1fr!important}}
+
+/* Home occupies the full desktop workspace instead of the base Create grid's first column. */
+#section-home{display:block;grid-template-columns:none}
+#section-home .home-dashboard{width:100%;max-width:1280px;margin-inline:auto}
+.home-create-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.home-status-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+@media(min-width:901px){#section-home{width:calc(100vw - var(--sidebar-width));max-width:1500px;margin-left:var(--sidebar-width);margin-right:0;padding:32px 40px}}
+@media(max-width:767px){#section-home{width:100%;max-width:100%;padding:16px}.home-dashboard{gap:16px}.home-create-grid{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.home-status-grid{grid-template-columns:1fr;gap:10px}.home-create-grid button{min-height:96px}.mobile-more-menu[hidden]{display:none!important;pointer-events:none}body.mobile-nav-open::after{display:none}}
+@media(max-width:479px){#section-home{padding:12px}.home-create-grid{grid-template-columns:1fr}.home-create-grid button{min-height:88px}}
