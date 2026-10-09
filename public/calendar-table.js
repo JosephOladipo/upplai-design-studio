@@ -229,17 +229,21 @@ function rowElement(row) {
   });
 
   const select = document.createElement('td');
+  select.dataset.label = 'Select';
   select.append(checkbox);
 
   const date = document.createElement('td');
+  date.dataset.label = 'Date';
   date.textContent = dateLabel(row.date);
 
   const headline = document.createElement('td');
+  headline.dataset.label = 'Title';
   headline.className = 'calendar-headline';
   headline.title = row.headline;
   headline.textContent = row.headline;
 
   const method = document.createElement('td');
+  method.dataset.label = 'Design method';
   method.textContent = human(row.style);
 
   if (row.style === 'openai-style') {
@@ -250,6 +254,7 @@ function rowElement(row) {
   }
 
   const format = document.createElement('td');
+  format.dataset.label = 'Format';
   const formatBadge = document.createElement('span');
 
   formatBadge.className = 'calendar-format-badge';
@@ -264,6 +269,7 @@ function rowElement(row) {
   if (row.folderId) { const folder = loadContentLibrary().folders.find(item => item.id === row.folderId); if (folder) { const badge = document.createElement('small'); badge.textContent = folder.name; format.append(badge); } }
 
   const state = document.createElement('td');
+  state.dataset.label = 'Status';
   const badge = document.createElement('span');
   const value = normalizeStatus(row.status);
 
@@ -274,7 +280,15 @@ function rowElement(row) {
   state.append(badge);
 
   const action = document.createElement('td');
+  action.dataset.label = 'Action';
   action.className = 'calendar-row-actions';
+
+  const primary = document.createElement('button');
+  primary.type = 'button'; primary.className = 'calendar-mobile-primary';
+  if (value === 'generated') { primary.textContent = 'Review'; primary.onclick = () => { openReview(row); document.dispatchEvent(new Event('navigate:review')); }; }
+  else if (value === 'failed' || value === 'stale') { primary.textContent = 'Retry'; primary.onclick = () => runCalendarQueue(new Set([row.id]), 'Selected'); }
+  else if (value === 'ready') { primary.textContent = 'Generate'; primary.onclick = () => runCalendarQueue(new Set([row.id]), 'Selected'); }
+  else { primary.textContent = 'Edit'; primary.onclick = () => document.dispatchEvent(new CustomEvent('calendar:edit', { detail: { id: row.id, context: { source: 'CALENDAR', calendarItemId: row.id, contentType: row.contentFormat || 'single-image', resultRef: row.resultRef || '', designMode: row.carousel?.designMode || row.multiPage?.designMode || 'native', pageOrSlideIndex: 0, returnDestination: 'CALENDAR', row } } })); }
 
   const menu = document.createElement('details');
   menu.className = 'calendar-action-menu';
@@ -382,7 +396,13 @@ function rowElement(row) {
   );
 
   menu.append(trigger, items);
-  action.append(menu);
+  const compactDetails = document.createElement('details'); compactDetails.className = 'calendar-mobile-details ux-disclosure';
+  const compactSummary = document.createElement('summary'); compactSummary.textContent = 'Details';
+  const compactBody = document.createElement('div'); compactBody.className = 'calendar-mobile-detail-body';
+  const direction = row.ai?.direction || row.ai?.designPrompt || row.supportingCopy || '';
+  compactBody.textContent = `Design: ${human(row.style)}${row.style === 'openai-style' ? ` · ${human(row.ai?.renderMode || row.ai?.visualStyle)}` : ''}${row.cta ? ` · CTA: ${row.cta}` : ''}${direction ? ` · ${direction}` : ''}`;
+  if (value === 'stale') { const stale = document.createElement('p'); stale.className = 'calendar-mobile-stale-note'; stale.textContent = 'Content changed after generation. Regenerate to update this design.'; compactBody.append(stale); }
+  compactDetails.append(compactSummary, compactBody); action.append(primary, compactDetails, menu);
 
   item.append(
     select,

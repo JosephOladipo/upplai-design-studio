@@ -1272,6 +1272,14 @@ form.addEventListener('submit', event => {
 regenerate.addEventListener('click', () => generateAI(true));
 aiRefineCurrent.addEventListener('click', refineCurrentAI);
 aiTryAnotherVersion.addEventListener('click', () => generateAI(true));
+document.addEventListener('ai-designer:reference-visual', async event => {
+  const result = event.detail?.result;
+  if (!result?.image || !result?.plan) return;
+  aiDesign = { plan: result.plan, planId: 'ai-designer-reference', mockMode: result.mockMode, image: result.image, fullArtwork: result.fullArtwork, backgroundPolicy: result.backgroundPolicy };
+  aiVersions = []; recordAIVersion(aiDesign, { kind: 'Reference image' });
+  await renderPreview();
+  status.textContent = 'Reference-guided AI design ready.';
+});
 // Status is a read-only local request, never an OpenAI request.
 fetch('/api/ai/status', { signal: AbortSignal.timeout(5000) }).then(response => {
   if (!response.ok) throw new Error('Status unavailable');

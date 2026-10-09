@@ -237,6 +237,28 @@ app.post('/api/ai/generate-visual', async (req, res) => {
   } catch (error) { reportError(res, error); }
   finally { aiBusy = false; }
 });
+app.post('/api/ai/ai-designer-reference', (req, res, next) => aiImageUpload.single('image')(req, res, error => {
+  if (error) return failure(res, 400, 'INVALID_IMAGE', 'Choose one PNG, JPG, or WebP reference image under 10 MB.');
+  next();
+}), async (req, res) => {
+  if (!checkRequest(req, res, true)) return;
+  if (!req.file || !['image/png','image/jpeg','image/webp'].includes(req.file.mimetype)) return failure(res, 400, 'INVALID_IMAGE', 'Choose a PNG, JPG, or WebP reference image.');
+  let planned; try { planned = JSON.parse(req.body?.plan || ''); } catch { return failure(res, 400, 'INVALID_INPUT', 'AI Designer requires a valid reviewed plan.'); }
+  const usage = ['style_inspiration','feature_subject','layout_inspiration','supporting_visual'].includes(req.body?.referenceUsage) ? req.body.referenceUsage : null;
+  if (!usage || !planned?.headline || !['native','full_ai'].includes(req.body?.textMode)) return failure(res, 400, 'INVALID_INPUT', 'Choose a reference usage and reviewed AI Designer plan.');
+  aiBusy = true;
+  try {
+    const { mockPlan } = await import('./src/ai-design-director.mjs');
+    const { refineVisual } = await import('./src/openai-image.mjs');
+    const usageInstruction = { style_inspiration:'Use this reference only for visual mood, lighting, spacing, texture and broad visual language. Do not copy logos, trademarks, or an exact protected identity.', feature_subject:'Use the visible subject from this reference as the visual subject where possible. Preserve the subject; do not replace it with an invented unrelated one.', layout_inspiration:'Use this reference only as layout and hierarchy inspiration while preserving supplied copy and Upplai rules.', supporting_visual:'Use this reference as a secondary supporting visual, never as the dominant layout driver.' }[usage];
+    const fullArtwork = req.body.textMode === 'full_ai';
+    const plan = mockPlan({ headline: String(planned.headline).slice(0, 180), supportingCopy: String(planned.body || '').slice(0, 700), cta: String(planned.cta || '').slice(0, 70), customDirection: [String(planned.visualDirection || '').slice(0, 600), usageInstruction].filter(Boolean).join('\n'), visualStyle: 'editorial', subjectType: 'auto', composition: 'center' });
+    const copy = { headline: plan.headline, supportingCopy: plan.supportingCopy, cta: plan.cta, customDirection: `${planned.visualDirection || ''}\n${usageInstruction}` };
+    const result = await refineVisual({ config, plan, quality: 'standard', image: req.file, instruction: usageInstruction, copy, fullArtwork });
+    res.json({ ...result, plan, referenceUsage: usage, mockMode: config.mockMode });
+  } catch (error) { reportError(res, error); }
+  finally { aiBusy = false; }
+});
 app.post('/api/ai/refine-visual', (req, res, next) => aiImageUpload.single('image')(req, res, error => {
   if (error) return failure(res, 400, 'INVALID_IMAGE', 'Choose a PNG, JPG, or WebP visual under 10 MB.');
   next();
