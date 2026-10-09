@@ -1,5 +1,5 @@
 import { saveReelVisualAsset, saveReelUploadAsset, loadReelUploadAsset, saveReelRenderAsset, loadReelRenderAsset, removeCalendarAsset } from '/src/calendar-assets.js';
-import {createReelProject,addScene,duplicateScene,deleteScene,moveScene,totalDuration,clampDuration,createScene} from '/src/reel-project.mjs';
+import {createReelProject,addScene,duplicateScene,deleteScene,moveScene,totalDuration,clampDuration,createScene,normalizeReelStartDuration,normalizeReelStartMotion} from '/src/reel-project.mjs';
 import { applyReelPlan } from '/src/reel-planner.mjs';
 import { ReelClock, timelineAt, timeLabel, normalizeAudio, fingerprint, validRender } from '/src/reel-timeline.js';
 import { createCanvasPainter } from '/src/reel-canvas.js';
@@ -16,6 +16,7 @@ function organizeReelWorkspace() {
   const title=document.createElement('div');const heading=panel.querySelector('h1');
   const summary=q('reel-project-summary');title.append(heading,summary);header.append(title);
   const create=document.createElement('section');create.className='reel-card reel-create-card';create.innerHTML='<h2>Create Reel</h2>';
+  create.append(q('reel-start'));
   const generator=q('reel-creation-mode').closest('section');
   [q('reel-title').closest('label'),q('reel-create')].forEach(node=>create.append(node));
   const setup=document.createElement('section');setup.className='reel-card reel-setup-card';setup.innerHTML='<h2>Build your Reel</h2>';
@@ -25,7 +26,9 @@ function organizeReelWorkspace() {
   [q('reel-preview'),q('reel-total'),q('reel-play').parentElement].forEach(node=>preview.append(node));
   const scene=document.createElement('section');scene.className='reel-card reel-scenes-card';scene.innerHTML='<div class="reel-card-heading"><h2>Scenes</h2></div>';
   scene.append(q('reel-add'),q('reel-scenes'));
-  const selected=document.createElement('section');selected.className='reel-card reel-selected-card';selected.innerHTML='<h2>Selected Scene</h2>';selected.append(q('reel-controls'));
+  const selected=document.createElement('section');selected.className='reel-card reel-selected-card';selected.innerHTML='<h2>Selected Scene</h2><p id="reel-selected-summary" class="hint"></p>';
+  const advanced=document.createElement('details');advanced.className='reel-advanced';advanced.open=false;advanced.innerHTML='<summary>Advanced scene controls</summary>';
+  advanced.append(q('reel-controls'));selected.append(advanced);
   const audioCard=q('reel-audio-mode').closest('section');audioCard.classList.add('reel-card');audioCard.querySelector('h2').textContent='Audio';
   q('reel-audio-upload-trigger').textContent='Choose Audio File';
   q('reel-audio-volume').closest('label').firstChild.nodeValue='Music Volume';
@@ -111,6 +114,7 @@ function render(){
   q('reel-title').value=project.title;q('reel-total').textContent=`${totalDuration(project)} seconds`;
   q('reel-project-summary').textContent=`${project.scenes.length} ${project.scenes.length===1?'Scene':'Scenes'} • ${totalDuration(project)} sec • 9:16${validRender(project)?' • Reel ready':''}`;
   const s=project.scenes[selected];q('reel-controls').hidden=!s;
+  document.getElementById('reel-selected-summary').textContent=s?`Scene ${selected+1} of ${project.scenes.length} · ${s.duration}s · ${s.visualType.replaceAll('-',' ')} · ${s.motion.replaceAll('-',' ')} · ${s.transition} · ${project.audio?.mode==='none'?'No audio':project.audio?.mode==='original'?'Original video audio':'Soundtrack'}`:'Select or add a scene to edit it.';
   q('reel-scenes').replaceChildren(...project.scenes.map((x,i)=>{
     const row=document.createElement('div');row.className='reel-scene';row.classList.toggle('is-selected',selected===i);
     row.innerHTML=`<button class="reel-scene-select" type="button" aria-label="Select scene ${i+1}">${i+1} · ${x.duration}s</button><span class="reel-scene-actions"><button type="button" title="Move left" aria-label="Move scene ${i+1} left">←</button><button type="button" title="Move right" aria-label="Move scene ${i+1} right">→</button><button type="button" title="Duplicate" aria-label="Duplicate scene ${i+1}">⧉</button><button type="button" title="Delete" aria-label="Delete scene ${i+1}">×</button></span>`;
@@ -131,6 +135,23 @@ function render(){
   if(!project.render&&!renderAbort&&!q('reel-render-status').textContent)q('reel-render-status').textContent='Ready to render.';
 }
 function update(){const s=project.scenes[selected];if(!s)return;for(const [id,field] of [['reel-headline','headline'],['reel-body','bodyText'],['reel-transition','transition'],['reel-motion','motion'],['reel-text-animation','textAnimation'],['reel-visual-direction','visualDirection'],['reel-visual-type','visualType'],['reel-background','background']])s[field]=q(id).value;s.duration=clampDuration(q('reel-duration').value);save();render();}
+function startPreferences(fallbackDuration=8){return {duration:normalizeReelStartDuration(q('reel-start-duration').value,fallbackDuration),motion:normalizeReelStartMotion(q('reel-start-motion').value),textAnimation:q('reel-start-text-animation').value||'fade',cta:q('reel-start-cta').value.trim()};}
+function sceneFromUploadedFile(file,preferences={}){return createScene({duration:preferences.duration||8,motion:preferences.motion||'zoom-in',textAnimation:preferences.textAnimation||'fade',bodyText:preferences.cta||'',visualType:'uploaded-media',visualMediaType:file.type.startsWith('video/')?'video':'image'});}
+function appendCtaOutro(target,preferences){if(preferences.cta)target.scenes.push(createScene({duration:preferences.duration,motion:'static',textAnimation:preferences.textAnimation,headline:preferences.cta,visualType:'branded-text'}));}
+async function useUploadedMedia(files,detail={}){
+  const accepted=[...files].filter(file=>['image/png','image/jpeg','image/webp','video/mp4'].includes(file?.type));
+  if(!accepted.length)throw new Error('Use PNG, JPEG, WebP, or MP4 media.');
+  const preferences={...startPreferences(accepted.length>1?3:8),...(detail.preferences||{})};
+  const next=createReelProject({title:detail.title||'Media Reel',sourceText:detail.source||'uploaded-media',creationMode:'manual'});
+  next.source={kind:detail.sourceKind||'upload',identity:detail.sourceIdentity||null};
+  for(let index=0;index<accepted.length;index++){
+    const file=accepted[index],scene=sceneFromUploadedFile(file,{...preferences,duration:detail.preferences?.duration||normalizeReelStartDuration(q('reel-start-duration').value,accepted.length>1?3:8),cta:''});
+    scene.visualAssetRef=await saveReelUploadAsset(file);next.scenes.push(scene);
+  }
+  appendCtaOutro(next,preferences);
+  pause();project=next;selected=0;save();render();document.dispatchEvent(new Event('navigate:reels'));
+  return {sceneCount:project.scenes.length,projectId:project.id};
+}
 q('reel-create').onclick=()=>{pause();project=createReelProject({title:q('reel-title').value,sourceText:q('reel-source').value,creationMode:q('reel-creation-mode').value});project.audio=normalizeAudio();selected=0;save();clearCompleted();render();};
 q('reel-title').onchange=()=>{project.title=q('reel-title').value||'Untitled Reel';save();};
 q('reel-source').onchange=()=>{project.sourceText=q('reel-source').value;save();};
@@ -170,7 +191,7 @@ q('reel-send-publishing').onclick=async()=>{
   if(!validRender(project))return;
   const button=q('reel-send-publishing');button.disabled=true;q('reel-render-status').textContent='Preparing your Reel for Publishing…';
   try {
-    await handoffToPublishing({ source:'reel-builder', contentType:'video', reelMediaRef:project.render.assetRef, mimeType:'video/mp4', title:project.title, headline:project.title, supportingCopy:project.sourceText, reelContext:project.render.context || { title:project.title, topic:project.sourceText, totalDuration:totalDuration(project), scenes:project.scenes.map((scene,order)=>({order,headline:scene.headline,bodyText:scene.bodyText,visualDirection:scene.visualDirection})) } });
+    await handoffToPublishing({ source:'reel-builder', contentType:'video', reelMediaRef:project.render.assetRef, mimeType:'video/mp4', title:project.title, headline:project.title, supportingCopy:project.sourceText, reelContext:{ ...(project.render.context||{}), title:project.title, topic:project.sourceText, projectId:project.id, sourceIdentity:project.source||null, calendarRowId:project.calendar?.rowId||null, calendarSource:project.calendar?.source||null, totalDuration:totalDuration(project), scenes:project.scenes.map((scene,order)=>({order,headline:scene.headline,bodyText:scene.bodyText,visualDirection:scene.visualDirection})) } });
     q('reel-render-status').textContent='Your Reel is ready in Publishing.';
   } catch(error) { q('reel-render-status').textContent=error.message||'Your Reel could not be sent to Publishing.'; }
   finally { button.disabled=!validRender(project); }
@@ -191,6 +212,14 @@ function modeUI(){const mode=creation.value;project.creationMode=mode; q('reel-a
 creation.value=project.creationMode||'ai-generate';animation.value=project.animationMode||'auto';creation.onchange=modeUI;animation.onchange=()=>{project.animationMode=animation.value;save()};modeUI();
 q('reel-motion').onchange=()=>{const s=project.scenes[selected];if(s){s.motion=q('reel-motion').value;save();render()}};q('reel-text-animation').onchange=()=>{const s=project.scenes[selected];if(s){s.textAnimation=q('reel-text-animation').value;save();render()}};
 build.onclick=async()=>{if(project.scenes.length&&!confirm('Replace existing Reel scenes?'))return;const status=q('reel-ai-status');status.textContent='Generating Reel scenes...';try{const r=await fetch('/api/reels/plan',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({content:describe.value,targetDuration:Number(q('reel-target').value),style:q('reel-style').value,creationMode:'describe-scenes'})}),d=await r.json();if(!r.ok)throw new Error(d.error?.message||'Reel planning failed.');project=applyReelPlan(project,d.plan,{content:describe.value,style:q('reel-style').value});project.creationMode='describe-scenes';selected=0;save();render();status.textContent='Reel scenes generated.'}catch(e){status.textContent=e.message}};
+q('reel-start-idea').onclick=()=>{creation.value='ai-generate';modeUI();q('reel-ai-content').focus();q('reel-start-status').textContent='Describe your idea and generate a scene plan.';};
+q('reel-start-script').onclick=()=>{creation.value='describe-scenes';modeUI();describe.focus();q('reel-start-status').textContent='Paste or write your script, then build its scenes.';};
+q('reel-start-single-image').onclick=()=>{q('reel-start-upload').accept='image/png,image/jpeg,image/webp';q('reel-start-upload').click();};
+q('reel-start-upload-image').onclick=()=>{q('reel-start-upload').accept='image/png,image/jpeg,image/webp';q('reel-start-upload').click();};
+q('reel-start-upload-video').onclick=()=>{q('reel-start-upload').accept='video/mp4';q('reel-start-upload').click();};
+q('reel-start-existing-design').onclick=()=>{q('reel-start-status').textContent='Open a finished design and choose Create Reel to use its currently visible version.';document.dispatchEvent(new Event('navigate:create'));};
+q('reel-start-carousel').onclick=()=>{q('reel-start-status').textContent='Open a completed carousel and choose Create Reel to keep its slide order and artwork.';document.dispatchEvent(new Event('navigate:create'));};
+q('reel-start-upload').onchange=async event=>{const file=event.target.files[0];event.target.value='';if(!file)return;try{await useUploadedMedia([file],{title:file.name.replace(/\.[^.]+$/,''),source:'reel-upload',sourceKind:'upload'});q('reel-start-status').textContent='Media added as a Reel scene.';}catch(error){q('reel-start-status').textContent=error.message;}};
 document.addEventListener('reel:use-rendered-designs', async event => {
   const detail=event.detail||{}, previews=detail.previews||[];
   if(!previews.length){detail.completion?.reject(new Error('The current design preview is unavailable.'));return;}
@@ -202,7 +231,7 @@ document.addEventListener('reel:use-rendered-designs', async event => {
     const { renderedDesignsToReelScenes }=await import('/src/reel-source-conversion.mjs');
     const scenes=await renderedDesignsToReelScenes(currentPreviews);
     project=createReelProject({title:detail.title||'Design Reel',creationMode:'manual'});
-    project.scenes=scenes;project.sourceText=detail.source||'single-image-current-version';selected=0;
+    const preferences=startPreferences(scenes.length>1?3:8);project.scenes=scenes.map(scene=>({...scene,duration:normalizeReelStartDuration(q('reel-start-duration').value,scenes.length>1?3:8),motion:preferences.motion,textAnimation:preferences.textAnimation}));appendCtaOutro(project,preferences);project.sourceText=detail.source||'single-image-current-version';project.source={kind:scenes.length>1?'carousel':'existing-design',identity:detail.source||null};selected=0;
     save();render();
     detail.completion?.resolve({sceneCount:scenes.length,projectId:project.id});
     document.dispatchEvent(new Event('navigate:reels'));
@@ -210,6 +239,11 @@ document.addEventListener('reel:use-rendered-designs', async event => {
     detail.completion?.reject(error);
     if(!detail.completion)alert(error.message||'Design could not be added to Reel.');
   }
+});
+document.addEventListener('reel:use-uploaded-media', async event => {
+  const detail=event.detail||{};
+  try {const result=await useUploadedMedia(detail.files||[],detail);detail.completion?.resolve(result);}
+  catch(error){detail.completion?.reject(error);if(!detail.completion)q('reel-start-status').textContent=error.message;}
 });
 document.addEventListener('reel:use-calendar-project', event => {
   const detail=event.detail||{}, plan=detail.plan;

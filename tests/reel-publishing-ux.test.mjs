@@ -34,7 +34,9 @@ test('one rendered MP4 and structured Reel context use the established Publishin
   assert.match(reels, /contentType:'video'/);
   assert.match(reels, /reelMediaRef:project\.render\.assetRef/);
   assert.match(reels, /mimeType:'video\/mp4'/);
-  assert.match(reels, /reelContext:project\.render\.context/);
+  assert.match(reels, /reelContext:\{ \.\.\.\(project\.render\.context\|\|\{\}\)/);
+  assert.match(reels, /projectId:project\.id/);
+  assert.match(reels, /calendarRowId:project\.calendar\?\.rowId\|\|null/);
   assert.match(publishing, /if \(result\.reelMediaRef\)/);
   assert.match(publishing, /asset\.file\.type !== 'video\/mp4'/);
   assert.match(publishing, /savePublishingMedia\(state\.media, `publishing-reel:\$\{result\.reelMediaRef\}`\)/);

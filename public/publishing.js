@@ -44,6 +44,7 @@ const mediaInput = q('publishing-media-input');
 const mediaTrigger = q('publishing-media-trigger');
 const mediaBadge = q('publishing-media-badge');
 const mediaDropzone = q('publishing-media-dropzone');
+const turnIntoReel = q('publishing-turn-into-reel');
 const modeSelect = q('publishing-mode');
 const altText = q('publishing-alt-text');
 const supportedManualMedia = new Set(['image/png','image/jpeg','image/webp','video/mp4','video/quicktime','video/webm']);
@@ -73,6 +74,15 @@ function renderLinkedinDocumentControl() { const host = q('publishing-linkedin-d
 function renderCaptionPrompts(selectedId = '') { const select = q('caption-prompt-select'); if (!select) return; const prompts = loadSavedCaptionPrompts(); select.replaceChildren(new Option('Select Saved Prompt', ''), ...prompts.map(item => new Option(item.name, item.id))); select.value = selectedId; }
 function selectedCaptionPrompt() { const id = q('caption-prompt-select')?.value; return loadSavedCaptionPrompts().find(item => item.id === id) || null; }
 function manageCaptionPrompt(action) { const instruction = q('publishing-ai-instruction'); const current = selectedCaptionPrompt(); try { if (action === 'save') { const name = prompt('Saved caption prompt name:'); if (!name) return; const item = saveCaptionPrompt(name, instruction.value); renderCaptionPrompts(item.id); } if (action === 'rename') { if (!current) return; const name = prompt('Rename saved caption prompt:', current.name); if (!name) return; renameCaptionPrompt(current.id, name); renderCaptionPrompts(current.id); } if (action === 'duplicate') { if (!current) return; const item = duplicateCaptionPrompt(current.id); renderCaptionPrompts(item.id); } if (action === 'delete') { if (!current || !confirm(`Delete saved caption prompt "${current.name}"?`)) return; deleteCaptionPrompt(current.id); renderCaptionPrompts(); } } catch (error) { q('publishing-ai-status').textContent = error.message || 'Saved prompt could not be updated.'; } }
+function handoffCarousel(result) {
+  if (Array.isArray(result.carousel?.slides)) return result.carousel;
+  if (Array.isArray(result.multiPage?.pages)) return { title: result.multiPage.title, description: result.multiPage.description, slides: result.multiPage.pages.map(page => ({ headline: page.headline, body: page.supportingCopy, cta: page.cta })) };
+  if (Array.isArray(result.aiDesignerPlan?.slides)) return { title: result.aiDesignerPlan.headline, description: result.aiDesignerPlan.body, slides: result.aiDesignerPlan.slides.map(slide => ({ headline: slide.headline, body: slide.body, cta: slide.cta })) };
+  return null;
+}
+function syncCarouselAltText(count) {
+  if (count && state.slideAltText.length !== count) state.slideAltText = Array.from({ length: count }, () => '');
+}
 async function assistantPayload(mode = state.captionMode) { return { media: await attachedMediaInput(state), mode, platforms: selectedPlatforms().map(channel => ({ ...channel, channelId: channel.id, id: channel.key })), sourceCaption: caption.value, instruction: q('publishing-ai-instruction').value, controls: { tone: q('publishing-ai-tone').value, length: q('publishing-ai-length').value, hashtags: q('publishing-ai-hashtags').value }, context: state.contentContext }; }
 function makeButton(id, text, action) { const value = document.createElement('button'); value.type = 'button'; value.textContent = text; value.onclick = action; return value; }
 function renderOptions(host, options, use) { host.replaceChildren(...options.map(option => { const card = document.createElement('article'); card.className = 'publishing-ai-option'; const label = document.createElement('strong'); label.textContent = option.label || 'Option'; const copy = document.createElement('p'); copy.textContent = option.text || ''; card.append(label, copy, makeButton('', 'Use Caption', () => { use(option.text || ''); savePublishingDraft(); })); return card; })); }
@@ -109,6 +119,9 @@ function setMediaState(source, message = 'Text-only post') {
   mediaBadge.hidden = !label;
   mediaBadge.textContent = label || '';
   mediaTrigger.textContent = source === 'none' ? 'Add media' : 'Replace media';
+  const imageFiles = state.carouselFiles.length ? state.carouselFiles : (state.media?.type?.startsWith('image/') ? [state.media] : []);
+  turnIntoReel.hidden = !imageFiles.length;
+  turnIntoReel.textContent = imageFiles.length > 1 ? 'Turn into Reel' : 'Turn into Reel';
   if (source === 'none') q('publishing-media').textContent = message;
 }
 
@@ -394,6 +407,21 @@ mediaInput.onchange = async (event) => {
   try { state.mediaRef = await savePublishingMedia(file); savePublishingDraft(); } catch (error) { out.textContent = 'Media loaded, but reload recovery failed: ' + error.message; }
 };
 
+turnIntoReel.onclick = async () => {
+  const files = state.carouselFiles.length ? state.carouselFiles : (state.media?.type?.startsWith('image/') ? [state.media] : []);
+  if (!files.length) return;
+  turnIntoReel.disabled = true;
+  out.textContent = 'Preparing your media as Reel scenes…';
+  try {
+    let resolve, reject; const completion = { promise: new Promise((res, rej) => { resolve = res; reject = rej; }), resolve, reject };
+    document.dispatchEvent(new CustomEvent('reel:use-uploaded-media', { detail: { files, title: state.contentContext.headline || caption.value.split(/\r?\n/).find(line => line.trim()) || 'Publishing Reel', source: 'publishing-media', sourceKind: 'publishing', sourceIdentity: state.mediaRef || null, completion } }));
+    await completion.promise;
+    out.textContent = 'Your media is ready in Reel Builder.';
+  } catch (error) {
+    out.textContent = error.message || 'The media could not be turned into a Reel.';
+  } finally { turnIntoReel.disabled = false; }
+};
+
 button.onclick = async () => {
   if (state.busy) return;
   const selected = selectedPlatforms();
@@ -464,6 +492,8 @@ button.onclick = async () => {
 document.addEventListener('publishing:generated', async (event) => {
   const result = event.detail || {};
   const completion = result.completion;
+  const preserveAltText = Boolean(result.resultRef && result.resultRef === state.generatedRef);
+  const carousel = handoffCarousel(result);
   beginMediaLifecycle();
   const publishingHandoffOperation = showProcessing({ title: 'Preparing Publishing…', message: 'Loading your prepared design.' });
   try {
@@ -478,10 +508,11 @@ document.addEventListener('publishing:generated', async (event) => {
   state.carouselFiles = [];
   state.existingMedia = null;
   mediaInput.value = '';
-  altText.value = ''; state.platformAltText = {}; state.platformCaptions = {};
+  if (!preserveAltText) { altText.value = ''; state.platformAltText = {}; state.slideAltText = []; }
+  state.platformCaptions = {};
   caption.value = [result.headline, result.supportingCopy, result.cta].filter(Boolean).join('\n\n');
-  state.contentContext = { ...state.contentContext, headline: result.headline || '', supportingCopy: result.supportingCopy || '', cta: result.cta || '', carousel: result.carousel || null, brand: { name: brand.name || 'Upplai', aiInstruction: brand.aiInstruction || '' } };
-  state.slideAltText = Array.isArray(result.carousel?.slides) ? result.carousel.slides.map(() => '') : [];
+  state.contentContext = { ...state.contentContext, headline: result.headline || '', supportingCopy: result.supportingCopy || '', cta: result.cta || '', carousel, brand: { name: brand.name || 'Upplai', aiInstruction: brand.aiInstruction || '' } };
+  if (!preserveAltText && Array.isArray(carousel?.slides)) state.slideAltText = carousel.slides.map(() => '');
 
   if (result.reelMediaRef) {
     const asset = await loadCalendarAsset(result.reelMediaRef);
@@ -510,6 +541,7 @@ document.addEventListener('publishing:generated', async (event) => {
       state.carouselSlides = (asset.slides || []).map(slide => { const node = document.createElement('template'); node.innerHTML = slide.html; return node.content.firstElementChild; });
       if (!state.carouselSlides.length || state.carouselSlides.some(slide => !slide)) throw new Error('Generated carousel could not be loaded. Return to Carousel and try again.');
       state.carouselFiles = await Promise.all(state.carouselSlides.map(async (slide, index) => new File([await previewPngBlob(slide)], `generated-slide-${index + 1}.png`, { type: 'image/png' })));
+      syncCarouselAltText(state.carouselFiles.length);
       mediaLog('[HANDOFF] rendered', `publishing-generated:${state.generatedRef}`, state.carouselFiles);
       state.mediaRef = await savePublishingMedia(state.carouselFiles, `publishing-generated:${state.generatedRef}`);
       state.carouselIndex = 0; renderPublishingCarousel(); renderLinkedinDocumentControl();
@@ -648,6 +680,7 @@ async function restorePublishingMedia() {
       if (state.carouselSlides.length) {
         state.carouselFiles = Array.isArray(savedMedia?.file) ? savedMedia.file : [];
         if (!state.carouselFiles.length) throw new Error('Saved publishing media is unavailable. Send the latest design to Publishing again.');
+        syncCarouselAltText(state.carouselFiles.length);
         renderPublishingCarousel(); mediaLog('[PUBLISHING] file restored', state.mediaRef, state.carouselFiles); mediaLog('[PUBLISHING] preview rendered', state.mediaRef, state.carouselFiles);
       } else {
         if (!savedMedia?.file) throw new Error('Saved publishing media is unavailable. Send the latest design to Publishing again.');
