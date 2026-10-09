@@ -16,11 +16,12 @@ test('desktop Home explicitly uses the available workspace and responsive card w
   assert.match(css, /\.home-status-grid\{grid-template-columns:repeat\(auto-fit,minmax\(220px,1fr\)\)\}/);
 });
 
-test('mobile workspace buttons route through the shared navigation event and close More', () => {
+test('mobile workspace buttons call shared navigation directly and close More', () => {
   for (const workspace of ['home','create','calendar','review','publishing','reels','brand']) assert.match(html, new RegExp(`data-mobile-workspace="${workspace}"`));
   assert.match(navigation, /export function navigateToWorkspace/);
   assert.match(navigation, /document\.addEventListener\('navigate:workspace', event => navigateToWorkspace\(event\.detail\?\.workspace\)\)/);
-  assert.match(ux, /new CustomEvent\('navigate:workspace'/);
+  assert.match(ux, /import \{ navigateToWorkspace \} from '\.\/navigation\.js'/);
+  assert.match(ux, /navigateToWorkspace\(workspace\)/);
   assert.match(ux, /more\.hidden = true/);
   assert.doesNotMatch(ux, /\$\(id\)\?\.click\(\)/);
 });

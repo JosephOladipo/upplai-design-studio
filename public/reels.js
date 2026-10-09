@@ -6,6 +6,8 @@ import { createCanvasPainter } from '/src/reel-canvas.js';
 import { ReelMedia } from '/src/reel-media.js';
 import { renderReel, mp4RecordingType } from '/src/reel-renderer.js';
 import { handoffToPublishing } from '/src/publishing-handoff.mjs';
+import { reelMusicLibrary } from '/src/reel-music-library.mjs';
+import { navigateBackFromWorkspace } from './navigation.js';
 const q=id=>document.getElementById(id), key='upplai-reel-project';
 const bind=(id,property,handler)=>{const element=q(id);if(element)element[property]=handler;return element;};
 function organizeReelWorkspace() {
@@ -14,9 +16,14 @@ function organizeReelWorkspace() {
   panel.dataset.reelWorkspace='true';
   const header=document.createElement('header');header.className='reel-project-header';
   const title=document.createElement('div');const heading=panel.querySelector('h1');
-  const summary=q('reel-project-summary');title.append(heading,summary);header.append(title);
+  const summary=q('reel-project-summary');title.append(heading,summary);
+  const headerActions=document.createElement('div');headerActions.className='reel-header-actions';headerActions.innerHTML='<button id="reel-back" type="button">← Back</button><button id="reel-reset" type="button">Reset Reel</button>';
+  header.append(title,headerActions);
   const create=document.createElement('section');create.className='reel-card reel-create-card';create.innerHTML='<h2>Create Reel</h2>';
-  create.append(q('reel-start'));
+  const start=q('reel-start');start.querySelector('h2').textContent='Start a Reel';
+  const quick=document.createElement('section');quick.className='reel-quick-settings';quick.innerHTML='<h2>Quick Settings</h2>';
+  quick.append(q('reel-start-image-options'));
+  create.append(start,quick);
   const generator=q('reel-creation-mode').closest('section');
   [q('reel-title').closest('label'),q('reel-create')].forEach(node=>create.append(node));
   const setup=document.createElement('section');setup.className='reel-card reel-setup-card';setup.innerHTML='<h2>Build your Reel</h2>';
@@ -26,13 +33,16 @@ function organizeReelWorkspace() {
   [q('reel-preview'),q('reel-total'),q('reel-play').parentElement].forEach(node=>preview.append(node));
   const scene=document.createElement('section');scene.className='reel-card reel-scenes-card';scene.innerHTML='<div class="reel-card-heading"><h2>Scenes</h2></div>';
   scene.append(q('reel-add'),q('reel-scenes'));
-  const selected=document.createElement('section');selected.className='reel-card reel-selected-card';selected.innerHTML='<h2>Selected Scene</h2><p id="reel-selected-summary" class="hint"></p>';
+  const selected=document.createElement('section');selected.className='reel-card reel-selected-card';selected.innerHTML='<h2>Selected Scene</h2><p id="reel-selected-summary" class="hint"></p><button id="reel-edit-selected" type="button">Edit Scene</button>';
   const advanced=document.createElement('details');advanced.className='reel-advanced';advanced.open=false;advanced.innerHTML='<summary>Advanced scene controls</summary>';
   advanced.append(q('reel-controls'));selected.append(advanced);
   const audioCard=q('reel-audio-mode').closest('section');audioCard.classList.add('reel-card');audioCard.querySelector('h2').textContent='Audio';
+  const library=document.createElement('details');library.className='reel-music-library';library.innerHTML=`<summary>Built-in Music</summary><p class="hint">${reelMusicLibrary.length?'Choose licensed music for this Reel.':'Music library coming soon. Upload your own audio for now.'}</p>`;
+  audioCard.append(library);
   q('reel-audio-upload-trigger').textContent='Choose Audio File';
   q('reel-audio-volume').closest('label').firstChild.nodeValue='Music Volume';
-  const exportCard=q('reel-render').closest('section');exportCard.classList.add('reel-card');exportCard.querySelector('h2').textContent='Export';
+  const exportCard=q('reel-render').closest('section');exportCard.classList.add('reel-card');exportCard.querySelector('h2').textContent='Render & Publish';
+  const platformMusic=document.createElement('p');platformMusic.className='reel-platform-music hint';platformMusic.textContent='Add platform music after export: upload your Reel, then add trending music inside Instagram or TikTok.';exportCard.append(platformMusic);
   setup.append(audioCard);workspace.append(setup,preview,selected,scene);
   panel.replaceChildren(header,create,workspace,exportCard);
 }
@@ -117,7 +127,7 @@ function render(){
   document.getElementById('reel-selected-summary').textContent=s?`Scene ${selected+1} of ${project.scenes.length} · ${s.duration}s · ${s.visualType.replaceAll('-',' ')} · ${s.motion.replaceAll('-',' ')} · ${s.transition} · ${project.audio?.mode==='none'?'No audio':project.audio?.mode==='original'?'Original video audio':'Soundtrack'}`:'Select or add a scene to edit it.';
   q('reel-scenes').replaceChildren(...project.scenes.map((x,i)=>{
     const row=document.createElement('div');row.className='reel-scene';row.classList.toggle('is-selected',selected===i);
-    row.innerHTML=`<button class="reel-scene-select" type="button" aria-label="Select scene ${i+1}">${i+1} · ${x.duration}s</button><span class="reel-scene-actions"><button type="button" title="Move left" aria-label="Move scene ${i+1} left">←</button><button type="button" title="Move right" aria-label="Move scene ${i+1} right">→</button><button type="button" title="Duplicate" aria-label="Duplicate scene ${i+1}">⧉</button><button type="button" title="Delete" aria-label="Delete scene ${i+1}">×</button></span>`;
+    row.innerHTML=`<button class="reel-scene-select" type="button" aria-label="Select scene ${i+1}">Scene ${i+1} · ${x.duration}s</button><span class="reel-scene-actions"><button type="button" title="Move left" aria-label="Move scene ${i+1} left">←</button><button type="button" title="Move right" aria-label="Move scene ${i+1} right">→</button><button type="button" title="Duplicate scene" aria-label="Duplicate scene ${i+1}">Duplicate</button><button type="button" title="Delete scene" aria-label="Delete scene ${i+1}">Delete</button></span>`;
     const bs=row.querySelectorAll('button');bs[0].onclick=()=>{pause();selected=i;render()};
     bs[1].onclick=()=>{project=moveScene(project,i,-1);selected=Math.max(0,i-1);save();render()};
     bs[2].onclick=()=>{project=moveScene(project,i,1);selected=Math.min(project.scenes.length-1,i+1);save();render()};
@@ -153,6 +163,16 @@ async function useUploadedMedia(files,detail={}){
   return {sceneCount:project.scenes.length,projectId:project.id};
 }
 q('reel-create').onclick=()=>{pause();project=createReelProject({title:q('reel-title').value,sourceText:q('reel-source').value,creationMode:q('reel-creation-mode').value});project.audio=normalizeAudio();selected=0;save();clearCompleted();render();};
+document.getElementById('reel-back').onclick=()=>navigateBackFromWorkspace('create');
+document.getElementById('reel-edit-selected').onclick=()=>{const controls=document.querySelector('.reel-advanced');if(controls){controls.open=true;controls.scrollIntoView({block:'nearest',behavior:'smooth'});}};
+document.getElementById('reel-reset').onclick=async()=>{
+  if(!confirm('Reset this Reel?\n\nThis will remove all scenes, audio settings, and current Reel edits.'))return;
+  const renderRef=project.render?.assetRef||'';
+  renderAbort?.abort();pause();project=createReelProject();selected=0;
+  q('reel-source').value='';q('reel-ai-content').value='';document.getElementById('reel-describe-scenes').value='';q('reel-start-cta').value='';q('reel-start-duration').value='auto';q('reel-start-motion').value='auto';q('reel-start-text-animation').value='fade';
+  save();clearCompleted();render();q('reel-render-status').textContent='Reel reset. Start with an idea, script, design, or upload.';
+  if(renderRef)await removeCalendarAsset(renderRef);
+};
 q('reel-title').onchange=()=>{project.title=q('reel-title').value||'Untitled Reel';save();};
 q('reel-source').onchange=()=>{project.sourceText=q('reel-source').value;save();};
 bind('reel-add','onclick',()=>{pause();project=addScene(project);selected=project.scenes.length-1;save();render();});

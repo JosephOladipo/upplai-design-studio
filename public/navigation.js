@@ -30,11 +30,15 @@ const WORKSPACE_KEY = 'upplai-design-studio-active-workspace';
 const backButton = document.getElementById('app-back');
 const mobileNavToggle = document.getElementById('mobile-nav-toggle');
 let applyingHistory = false;
+let activeWorkspace = 'create';
+let previousWorkspace = 'create';
 const validWorkspaces = new Set(['home', 'create', 'brand', 'calendar', 'review', 'publishing','reels']);
 
 
 export function navigateToWorkspace(section, { history = true } = {}) {
   section = validWorkspaces.has(section) ? section : 'create';
+  if (section !== activeWorkspace) previousWorkspace = activeWorkspace;
+  activeWorkspace = section;
   const sections = {
     home: [homeButton, homeSection],
     create: [createButton, createSection],
@@ -54,6 +58,10 @@ export function navigateToWorkspace(section, { history = true } = {}) {
   document.body.classList.remove('mobile-nav-open');
   mobileNavToggle?.setAttribute('aria-expanded', 'false');
   if (history && !applyingHistory) { window.history.pushState({ workspace: section }, '', '#' + section); backButton.hidden = false; }
+}
+
+export function navigateBackFromWorkspace(fallback = 'create') {
+  navigateToWorkspace(previousWorkspace || fallback);
 }
 
 
