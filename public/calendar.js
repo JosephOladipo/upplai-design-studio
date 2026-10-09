@@ -11,7 +11,7 @@ const columns = [
   'Quality',
   'Render Mode',
   'Design Prompt',
-  'Content Format'
+  'Content Format','Raw Copy','Creative Direction','Text Mode','Slide Count','Page Count','Reel Duration','Audio Mode','Reference Usage'
 ];
 
 import {
@@ -35,7 +35,7 @@ const exampleRows = [
     'Small resume mistakes can prevent strong candidates from reaching the interview stage.',
     'Check Your Resume',
     'Bold Statement',
-    '', '', '', '', '', '', ''
+    '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''
   ],
   [
     '2026-09-22',
@@ -50,7 +50,7 @@ const exampleRows = [
     'Draft',
     'full-ai-artwork',
     'Use transparent intentional artwork on a pure white canvas.',
-    'single-image'
+    'single-image','','','','','','','',''
   ]
 ];
 
@@ -87,6 +87,18 @@ const manualForm = document.getElementById('manual-calendar-form');
 const manualErrors = document.getElementById('manual-calendar-errors');
 const manualStyle = document.getElementById('manual-style');
 const manualAi = document.getElementById('manual-ai-fields');
+const fieldLabel = id => document.getElementById(id)?.closest('label');
+const formatSpecificFields = ['manual-raw-copy','manual-creative-direction','manual-text-mode','manual-slide-count','manual-page-count','manual-reel-duration','manual-audio-mode','manual-reference-usage'];
+function updateManualFormatFields() {
+  const format = document.getElementById('manual-content-format').value;
+  const show = new Set({
+    'single-image': ['manual-creative-direction'], carousel: ['manual-raw-copy','manual-slide-count','manual-creative-direction'], 'multi-page': ['manual-raw-copy','manual-page-count','manual-creative-direction'], ai_designer: ['manual-raw-copy','manual-creative-direction','manual-text-mode','manual-reference-usage'], reel: ['manual-raw-copy','manual-reel-duration','manual-audio-mode','manual-creative-direction'], auto: ['manual-raw-copy','manual-creative-direction']
+  }[format] || ['manual-creative-direction']);
+  formatSpecificFields.forEach(id => { const label = fieldLabel(id); if (label) label.hidden = !show.has(id); });
+  const basic = ['manual-headline','manual-copy','manual-cta','manual-style'].map(fieldLabel);
+  basic.forEach(label => { if (label) label.hidden = !['single-image'].includes(format); });
+  manualAi.hidden = format !== 'single-image' || manualStyle.value !== 'openai-style';
+}
 let editingId = null;
 for (const style of designStyles) manualStyle.add(new Option(style.name, style.id));
 const labelFor = value => value === 'auto' ? 'Auto' : value === 'none' ? 'No Main Subject' : value === '3d' ? '3D' : value[0].toUpperCase() + value.slice(1);
@@ -110,11 +122,14 @@ function openManualForm(row) {
   document.getElementById('manual-render-mode').value = row?.ai?.renderMode || 'visual-native-text';
   document.getElementById('manual-design-prompt').value = row?.ai?.designPrompt || '';
   document.getElementById('manual-quality').value = row?.ai?.quality ?? 'draft';
+  document.getElementById('manual-raw-copy').value = row?.rawCopy ?? ''; document.getElementById('manual-creative-direction').value = row?.creativeDirection ?? ''; document.getElementById('manual-text-mode').value = row?.textMode ?? 'auto'; document.getElementById('manual-slide-count').value = row?.slideCount || ''; document.getElementById('manual-page-count').value = row?.pageCount || ''; document.getElementById('manual-reel-duration').value = row?.reelDuration || ''; document.getElementById('manual-audio-mode').value = row?.audioMode ?? ''; document.getElementById('manual-reference-usage').value = row?.referenceUsage ?? 'none';
   manualErrors.textContent = '';
   manualAi.hidden = manualStyle.value !== 'openai-style';
   manualForm.querySelector('h2').textContent = editingId ? 'Edit Post' : 'Add Post';
   manualForm.querySelector('[type="submit"]').textContent = editingId ? 'Save Changes' : 'Save Post';
   manualForm.hidden = false;
+  manualForm.dataset.contentFormat = document.getElementById('manual-content-format').value;
+  updateManualFormatFields();
 }
 addButton.addEventListener('click', () => openManualForm());
 document.addEventListener('calendar:edit', event => {
@@ -130,12 +145,13 @@ document.addEventListener('calendar:delete', event => {
   status.textContent = 'Post deleted from Calendar.';
   document.dispatchEvent(new CustomEvent('calendar:changed', { detail: { removedId: id, resultRef: row.resultRef } }));
 });
-manualStyle.addEventListener('change', () => { manualAi.hidden = manualStyle.value !== 'openai-style'; });
+manualStyle.addEventListener('change', updateManualFormatFields);
+document.getElementById('manual-content-format').addEventListener('change', event => { manualForm.dataset.contentFormat = event.target.value; updateManualFormatFields(); });
 document.getElementById('cancel-calendar-post').addEventListener('click', () => { editingId = null; manualForm.hidden = true; manualForm.reset(); });
 manualForm.addEventListener('submit', event => {
   event.preventDefault();
   const existing = loadCalendar()?.rows || [];
-  const input = { date: document.getElementById('manual-date').value, headline: document.getElementById('manual-headline').value, supportingCopy: document.getElementById('manual-copy').value, cta: document.getElementById('manual-cta').value, contentFormat: document.getElementById('manual-content-format').value, carousel: existing.find(item => item.id === editingId)?.carousel, style: manualStyle.value, visualStyle: document.getElementById('manual-visual-style').value, subjectType: document.getElementById('manual-subject').value, composition: document.getElementById('manual-composition').value, direction: document.getElementById('manual-direction').value, quality: document.getElementById('manual-quality').value, renderMode: document.getElementById('manual-render-mode').value, designPrompt: document.getElementById('manual-design-prompt').value };
+  const input = { date: document.getElementById('manual-date').value, headline: document.getElementById('manual-headline').value, supportingCopy: document.getElementById('manual-copy').value, cta: document.getElementById('manual-cta').value, contentFormat: document.getElementById('manual-content-format').value, carousel: existing.find(item => item.id === editingId)?.carousel, style: manualStyle.value, visualStyle: document.getElementById('manual-visual-style').value, subjectType: document.getElementById('manual-subject').value, composition: document.getElementById('manual-composition').value, direction: document.getElementById('manual-direction').value, quality: document.getElementById('manual-quality').value, renderMode: document.getElementById('manual-render-mode').value, designPrompt: document.getElementById('manual-design-prompt').value, rawCopy: document.getElementById('manual-raw-copy').value, creativeDirection: document.getElementById('manual-creative-direction').value, textMode: document.getElementById('manual-text-mode').value, slideCount: document.getElementById('manual-slide-count').value, pageCount: document.getElementById('manual-page-count').value, reelDuration: document.getElementById('manual-reel-duration').value, audioMode: document.getElementById('manual-audio-mode').value, referenceUsage: document.getElementById('manual-reference-usage').value };
   const index = existing.findIndex(row => row.id === editingId);
   const result = index < 0 ? createManualRow(input, existing) : updateManualRow(existing[index], input);
   if (!result.row) { manualErrors.textContent = result.errors.join(' '); return; }

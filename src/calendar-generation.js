@@ -35,11 +35,18 @@ export function createCalendarQueue(generate, now = () => new Date().toISOString
           let row = { ...current.find(item => item.id === selected.id), status: 'generating', error: null };
           current = replace(current, row); await onRows(current, row, summary);
           try {
-            results.set(row.id, await generate(['carousel', 'multi-page'].includes(row.contentFormat) ? row : calendarSingleImageInput(row)));
-            row = { ...row, status: 'generated', generatedAt: now(), error: null, resultRef: null };
+            const generated = await generate(['carousel', 'multi-page', 'ai_designer', 'reel'].includes(row.contentFormat) ? row : calendarSingleImageInput(row));
+            results.set(row.id, generated);
+            row = { ...row, status: generated?.calendarStatus || 'generated', generatedAt: now(), error: null, resultRef: null };
             summary.generated++;
           } catch (error) {
-            row = { ...row, status: 'failed', generatedAt: null, error: compactError(error) };
+            row = {
+              ...row,
+              status: 'failed',
+              generatedAt: null,
+              error: compactError(error),
+              ...(error?.aiDesignerPlan ? { aiDesignerPlan: error.aiDesignerPlan } : {})
+            };
             summary.failed++;
           }
           current = replace(current, row); await onRows(current, row, summary);

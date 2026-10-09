@@ -3,6 +3,7 @@
 
 const createButton =
   document.getElementById('nav-create');
+const homeButton = document.getElementById('nav-home');
 
 const brandButton =
   document.getElementById('nav-brand');
@@ -15,6 +16,7 @@ const reelsButton = document.getElementById('nav-reels');
 
 const createSection =
   document.getElementById('section-create');
+const homeSection = document.getElementById('section-home');
 
 const brandSection =
   document.getElementById('section-brand');
@@ -28,12 +30,13 @@ const WORKSPACE_KEY = 'upplai-design-studio-active-workspace';
 const backButton = document.getElementById('app-back');
 const mobileNavToggle = document.getElementById('mobile-nav-toggle');
 let applyingHistory = false;
-const validWorkspaces = new Set(['create', 'brand', 'calendar', 'review', 'publishing','reels']);
+const validWorkspaces = new Set(['home', 'create', 'brand', 'calendar', 'review', 'publishing','reels']);
 
 
 function showSection(section, { history = true } = {}) {
   section = validWorkspaces.has(section) ? section : 'create';
   const sections = {
+    home: [homeButton, homeSection],
     create: [createButton, createSection],
     brand: [brandButton, brandSection],
     calendar: [calendarButton, calendarSection],
@@ -58,6 +61,7 @@ createButton.addEventListener(
   'click',
   () => showSection('create')
 );
+homeButton.addEventListener('click', () => showSection('home'));
 
 
 brandButton.addEventListener(

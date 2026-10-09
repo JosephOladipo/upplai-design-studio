@@ -159,6 +159,7 @@ q('reel-render').onclick=async()=>{
     if(result.fingerprint!==fingerprint(project)||renderAbort.signal.aborted){await removeCalendarAsset(assetRef);throw new Error('Project changed. Render the current Reel again.');}
     const {blob,...metadata}=result;project.render={...metadata,assetRef};save();await restoreCompleted();
     if(previous&&previous!==assetRef)await removeCalendarAsset(previous);
+    if(project.calendar?.rowId)document.dispatchEvent(new CustomEvent('reel:rendered',{detail:{calendarRowId:project.calendar.rowId,projectId:project.id,render:project.render}}));
     q('reel-render-status').textContent='Complete — MP4 ready.';
   }catch(error){q('reel-render-status').textContent=error.message;}
   finally{renderAbort=null;q('reel-render').disabled=!project.scenes.length;q('reel-render-cancel').hidden=true;}
@@ -209,4 +210,28 @@ document.addEventListener('reel:use-rendered-designs', async event => {
     detail.completion?.reject(error);
     if(!detail.completion)alert(error.message||'Design could not be added to Reel.');
   }
+});
+document.addEventListener('reel:use-calendar-project', event => {
+  const detail=event.detail||{}, plan=detail.plan;
+  try {
+    if(!plan?.scenes?.length)throw new Error('Calendar Reel plan has no scenes. Generate the Calendar item again.');
+    project=createReelProject({title:detail.title||plan.title||'Calendar Reel',sourceText:detail.content||'',creationMode:'ai-generate'});
+    project=applyReelPlan(project,plan,{content:detail.content||'',style:detail.style||'educational'});
+    project.audio=normalizeAudio({...project.audio,mode:['none','music','original'].includes(detail.audioMode)?detail.audioMode:'none'});
+    project.calendar={rowId:String(detail.calendarRowId||''),source:'calendar',creativeDirection:String(detail.creativeDirection||'').slice(0,1200),audioMode:project.audio.mode};
+    if(!project.calendar.rowId)throw new Error('Calendar Reel is missing its Calendar identity.');
+    selected=0;save();render();
+    detail.completion?.resolve({project:structuredClone(project),projectId:project.id,sceneCount:project.scenes.length,totalDuration:totalDuration(project)});
+  } catch(error) { detail.completion?.reject(error); }
+});
+document.addEventListener('reel:open-calendar-project', event => {
+  const detail=event.detail||{};
+  try {
+    const source=detail.project;
+    if(!source?.id||!Array.isArray(source.scenes)||!source.scenes.length)throw new Error('This Calendar Reel project is unavailable. Generate it again.');
+    project={...createReelProject({title:source.title,sourceText:source.sourceText,creationMode:source.creationMode}),...source,scenes:source.scenes.map(scene=>createScene(scene)),audio:normalizeAudio(source.audio)};
+    selected=0;save();render();
+    detail.completion?.resolve({projectId:project.id});
+    document.dispatchEvent(new Event('navigate:reels'));
+  } catch(error) { detail.completion?.reject(error); }
 });

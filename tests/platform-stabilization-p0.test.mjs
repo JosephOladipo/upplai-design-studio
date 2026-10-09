@@ -32,5 +32,5 @@ test('multi-page prompt generation normalizes page count and produces ordered mo
 test('Calendar edit dispatches an explicit Calendar identity context and does not navigate multi-page or carousel review edits away', () => {
   const source = fs.readFileSync(new URL('../public/calendar-table.js', import.meta.url), 'utf8');
   assert.match(source, /source: 'CALENDAR', calendarItemId: row\.id/);
-  assert.match(source, /!\['carousel', 'multi-page'\]\.includes\(row\.contentFormat\)/);
+  assert.match(source, /!isPaginatedCalendarResult\(row\)/);
 });

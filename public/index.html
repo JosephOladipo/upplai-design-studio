@@ -32,6 +32,8 @@
 
   <nav id="studio-navigation" class="studio-nav" aria-label="Studio sections">
 
+    <button id="nav-home" class="studio-nav-button" type="button" data-section="home" aria-pressed="false">Home</button>
+
     <button
       id="nav-create"
       class="studio-nav-button active"
@@ -65,6 +67,10 @@
     </button>
 
   </nav>
+
+  <main id="section-home" class="studio-section" hidden>
+    <section class="panel home-dashboard" aria-labelledby="home-title"><div><h1 id="home-title">What do you want to create?</h1><p class="intro">Choose a format, create it, then review and publish when it is ready.</p></div><div class="home-create-grid"><button type="button" data-home-create="single">Single Image<span>One focused post</span></button><button type="button" data-home-create="carousel">Carousel<span>Tell a story across slides</span></button><button type="button" data-home-create="multi-page">Multi-Page<span>Build a connected set</span></button><button type="button" data-home-create="ai-designer">AI Designer<span>Start with your source copy</span></button><button type="button" data-home-workspace="reels">Reel<span>Create a short video</span></button></div><div class="home-status-grid"><section><h2>Upcoming Calendar</h2><p id="home-calendar-summary" class="hint">Open Calendar to plan upcoming content.</p><button type="button" data-home-workspace="calendar">Open Calendar</button></section><section><h2>Waiting for Review</h2><p class="hint">Review generated designs before publishing.</p><button type="button" data-home-workspace="review">Open Review</button></section><section><h2>Drafts & Saved Work</h2><p class="hint">Your current Create, Carousel, and Reel work remains available as you navigate.</p><button type="button" data-home-workspace="create">Continue Creating</button></section></div></section>
+  </main>
 
 
   <!-- CREATE DESIGN SCREEN -->
@@ -1053,7 +1059,7 @@
         <label>Headline <textarea id="manual-headline" name="headline" maxlength="180" required></textarea></label>
         <label>Supporting Copy <textarea id="manual-copy" name="supportingCopy" maxlength="700"></textarea></label>
         <label>CTA <input id="manual-cta" name="cta" maxlength="70"></label>
-        <label>Content Format <select id="manual-content-format" name="contentFormat"><option value="single-image">Single Image</option><option value="multi-page">Multi-Page</option><option value="carousel">Carousel</option></select></label><label>Design Method <select id="manual-style" name="style"></select></label>
+        <label>Content Format <select id="manual-content-format" name="contentFormat"><option value="single-image">Single Image</option><option value="carousel">Carousel</option><option value="multi-page">Multi-Page</option><option value="ai_designer">AI Designer</option><option value="reel">Reel</option><option value="auto">Auto</option></select></label><label>Platform <input id="manual-platform" name="platform" placeholder="Optional platform"></label><label>Design Method <select id="manual-style" name="style"></select></label><div id="manual-format-fields"><label>Raw Copy / Topic<textarea id="manual-raw-copy" maxlength="8000"></textarea></label><label>Creative Direction<textarea id="manual-creative-direction" maxlength="1200"></textarea></label><label>Text Mode<select id="manual-text-mode"><option value="auto">Auto</option><option value="native">Native Text</option><option value="full_ai">Full AI Artwork</option></select></label><label>Slide Count<input id="manual-slide-count" type="number" min="2" max="10"></label><label>Page Count<input id="manual-page-count" type="number" min="2" max="10"></label><label>Reel Duration<input id="manual-reel-duration" type="number" min="5" max="120"></label><label>Audio Mode<input id="manual-audio-mode" placeholder="Optional audio preference"></label><label>Reference Usage<select id="manual-reference-usage"><option value="none">None</option><option value="style_inspiration">Style inspiration</option><option value="feature_subject">Feature subject</option><option value="layout_inspiration">Layout inspiration</option><option value="supporting_visual">Supporting visual</option></select></label></div>
         <div id="manual-ai-fields" hidden>
           <label>Visual Style <select id="manual-visual-style"></select></label><label>Visual Subject <select id="manual-subject"></select></label><label>Composition <select id="manual-composition"></select></label>
           <label>AI Design Mode <select id="manual-render-mode"><option value="visual-native-text">AI Visual + Native Text</option><option value="full-ai-artwork">Full AI Artwork (flattened)</option></select></label><label>Design Prompt <textarea id="manual-design-prompt" maxlength="1200"></textarea></label><label>Visual Direction <textarea id="manual-direction" placeholder="Premium modern workspace, no people, soft daylight, leave negative space on the left."></textarea></label><label>Quality <select id="manual-quality"><option value="draft">Draft</option><option value="standard">Standard</option><option value="premium">Premium</option></select></label>
@@ -1191,7 +1197,7 @@
     </section>
   </section>
 </main>
-<nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Mobile navigation"><button type="button" data-mobile-workspace="create">Home</button><button type="button" data-mobile-workspace="create">Create</button><button type="button" data-mobile-workspace="calendar">Calendar</button><button type="button" data-mobile-workspace="review">Review</button><button id="mobile-more-toggle" type="button" aria-expanded="false" aria-controls="mobile-more-menu">More</button></nav>
+<nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Mobile navigation"><button type="button" data-mobile-workspace="home">Home</button><button type="button" data-mobile-workspace="create">Create</button><button type="button" data-mobile-workspace="calendar">Calendar</button><button type="button" data-mobile-workspace="review">Review</button><button id="mobile-more-toggle" type="button" aria-expanded="false" aria-controls="mobile-more-menu">More</button></nav>
 <div id="mobile-more-menu" class="mobile-more-menu" hidden><button type="button" data-mobile-workspace="publishing">Publish</button><button type="button" data-mobile-workspace="reels">Reels</button><button type="button" data-mobile-workspace="brand">Brand Kit</button></div>
 <script type="module" src="/publishing.js?v=pub-click-02"></script>
 </body>

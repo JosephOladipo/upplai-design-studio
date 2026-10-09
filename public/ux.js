@@ -24,3 +24,5 @@ const createWorkspace = $('section-create');
 function setCreateView(view) { if (!createWorkspace) return; createWorkspace.dataset.mobileView = view; document.querySelectorAll('[data-create-view]').forEach(button => { const active = button.dataset.createView === view; button.classList.toggle('active', active); button.setAttribute('aria-pressed', String(active)); }); }
 document.querySelectorAll('[data-create-view]').forEach(button => button.addEventListener('click', () => setCreateView(button.dataset.createView)));
 setCreateView('edit');
+document.querySelectorAll('[data-home-workspace]').forEach(button => button.addEventListener('click', () => $("nav-" + button.dataset.homeWorkspace)?.click()));
+document.querySelectorAll('[data-home-create]').forEach(button => button.addEventListener('click', () => { $('nav-create')?.click(); document.querySelector(`[data-content-type="${button.dataset.homeCreate}"]`)?.click(); setCreateView('edit'); }));

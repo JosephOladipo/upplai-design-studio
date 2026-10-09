@@ -4,7 +4,7 @@ import { normalizeCarousel, createCarouselDraft } from './carousel.js';
 import { normalizeMultiPage, createMultiPageDraft } from './multi-page.js';
 
 export const CALENDAR_STORAGE_KEY = 'upplai-design-studio:calendar:v1';
-export const CALENDAR_STATUSES = ['ready', 'generating', 'generated', 'failed', 'stale', 'skipped'];
+export const CALENDAR_STATUSES = ['ready', 'generating', 'reel-ready', 'generated', 'failed', 'stale', 'skipped'];
 const QUALITY_VALUES = ['draft', 'standard', 'premium'];
 const HEADER_NAMES = {
   date: 'date',
@@ -19,8 +19,10 @@ const HEADER_NAMES = {
   quality: 'quality',
   rendermode: 'renderMode',
   designprompt: 'designPrompt',
-  contentformat: 'contentFormat'
+  contentformat: 'contentFormat', rawcopy: 'rawCopy', creativedirection: 'creativeDirection', textmode: 'textMode', slidecount: 'slideCount', pagecount: 'pageCount', reelduration: 'reelDuration', audiomode: 'audioMode', referenceusage: 'referenceUsage'
 };
+export const CALENDAR_CONTENT_FORMATS = ['single-image', 'single_image', 'carousel', 'multi-page', 'multi_page', 'ai_designer', 'reel', 'auto'];
+export function normalizeContentFormat(value) { const compacted = compact(value); return ({ singleimage: 'single-image', carousel: 'carousel', multipage: 'multi-page', aidesigner: 'ai_designer', reel: 'reel', auto: 'auto' })[compacted] || 'single-image'; }
 
 const compact = value => String(value ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '');
 const display = value => String(value ?? '').trim();
@@ -171,9 +173,10 @@ export function fingerprint(row) {
     supportingCopy: row.supportingCopy,
     cta: row.cta,
     style: row.style,
-    contentFormat: ['carousel', 'multi-page'].includes(row.contentFormat) ? row.contentFormat : 'single-image',
+  contentFormat: normalizeContentFormat(row.contentFormat),
     carousel: row.contentFormat === 'carousel' ? normalizeCarousel(row.carousel) : null,
     multiPage: row.contentFormat === 'multi-page' ? normalizeMultiPage(row.multiPage) : null,
+    rawCopy: row.rawCopy, creativeDirection: row.creativeDirection, textMode: row.textMode, slideCount: row.slideCount, pageCount: row.pageCount, reelDuration: row.reelDuration, audioMode: row.audioMode, referenceUsage: row.referenceUsage,
     ai: row.ai
   }));
 }
@@ -191,7 +194,7 @@ function normalizeRow(raw, rowNumber, order, headers) {
   const subjectType = normalizeImportGuidance(getCell(raw, headers, 'subjectType'), subjectTypes, subjectTypeMap, 'auto');
   const composition = normalizeImportComposition(getCell(raw, headers, 'composition'));
   const contentFormat = compact(getCell(raw, headers, 'contentFormat'));
-  const normalizedFormat = contentFormat === 'carousel' ? 'carousel' : contentFormat === 'multi-page' ? 'multi-page' : 'single-image';
+  const normalizedFormat = normalizeContentFormat(contentFormat);
   const quality = normalizeImportGuidance(getCell(raw, headers, 'quality'), QUALITY_VALUES, qualityMap, 'draft');
   if (errors.length) return { error: { row: rowNumber, messages: errors } };
   const row = {
@@ -205,6 +208,7 @@ function normalizeRow(raw, rowNumber, order, headers) {
     contentFormat: normalizedFormat,
     carousel: normalizedFormat === 'carousel' ? createCarouselDraft() : null,
     multiPage: normalizedFormat === 'multi-page' ? createMultiPageDraft() : null,
+    rawCopy: getCell(raw, headers, 'rawCopy'), creativeDirection: getCell(raw, headers, 'creativeDirection'), textMode: getCell(raw, headers, 'textMode'), slideCount: Number(getCell(raw, headers, 'slideCount')) || 0, pageCount: Number(getCell(raw, headers, 'pageCount')) || 0, reelDuration: Number(getCell(raw, headers, 'reelDuration')) || 0, audioMode: getCell(raw, headers, 'audioMode'), referenceUsage: getCell(raw, headers, 'referenceUsage'),
     ai: {
       visualStyle: visualStyle.value,
       subjectType: subjectType.value,
@@ -329,7 +333,7 @@ export function nextRowOrder(rows) {
 
 export function createManualRow(input, rows = []) {
   const date = normalizeDate(input.date);
-  const headline = display(input.headline);
+  const headline = display(input.headline) || display(input.rawCopy).slice(0, 180);
   const style = styleMap.get(compact(input.style));
   const errors = [];
   if (!date) errors.push('Choose a valid date.');
@@ -342,10 +346,10 @@ export function createManualRow(input, rows = []) {
   const quality = normalizeEnum(input.quality, QUALITY_VALUES, qualityMap, 'Quality', 'draft');
   for (const item of [visualStyle, subjectType, composition, quality]) if (item.error) errors.push(item.error);
   if (errors.length) return { errors };
-  const contentFormat = input.contentFormat === 'carousel' ? 'carousel' : input.contentFormat === 'multi-page' ? 'multi-page' : 'single-image';
+  const contentFormat = normalizeContentFormat(input.contentFormat);
   const order = nextRowOrder(rows);
   const row = { id: `calendar-manual-${hash(`${Date.now()}|${order}|${headline}`)}`, order, date, headline,
-    supportingCopy: display(input.supportingCopy), cta: display(input.cta), style, contentFormat, carousel: contentFormat === 'carousel' ? normalizeCarousel(input.carousel || createCarouselDraft()) : null, multiPage: contentFormat === 'multi-page' ? normalizeMultiPage(input.multiPage || createMultiPageDraft(input.pageCount || 2)) : null,
+    supportingCopy: display(input.supportingCopy), cta: display(input.cta), style, contentFormat, carousel: contentFormat === 'carousel' ? normalizeCarousel(input.carousel || createCarouselDraft()) : null, multiPage: contentFormat === 'multi-page' ? normalizeMultiPage(input.multiPage || createMultiPageDraft(input.pageCount || 2)) : null, rawCopy: display(input.rawCopy), creativeDirection: display(input.creativeDirection), textMode: display(input.textMode), slideCount: Number(input.slideCount) || 0, pageCount: Number(input.pageCount) || 0, reelDuration: Number(input.reelDuration) || 0, audioMode: display(input.audioMode), referenceUsage: display(input.referenceUsage),
     ai: { visualStyle: visualStyle.value, subjectType: subjectType.value, composition: composition.value, direction: display(input.direction), quality: quality.value, renderMode: input.renderMode === 'full-ai-artwork' ? 'full-ai-artwork' : 'visual-native-text', designPrompt: display(input.designPrompt) },
     status: 'ready', generatedAt: null, error: null, resultRef: null };
   row.inputFingerprint = fingerprint(row);
@@ -366,6 +370,6 @@ export function updateManualRow(existing, input) {
   };
   const relevantChange = fingerprint(existing) !== row.inputFingerprint;
   const previousStatus = normalizeStatus(existing.status);
-  row.status = previousStatus === 'generated' && relevantChange ? 'stale' : previousStatus;
+  row.status = ['generated', 'reel-ready'].includes(previousStatus) && relevantChange ? 'stale' : previousStatus;
   return { row, relevantChange };
 }

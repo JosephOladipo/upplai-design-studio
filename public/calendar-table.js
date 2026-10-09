@@ -7,6 +7,7 @@ import { calendarResultRef, saveCalendarAsset, loadCalendarAsset, removeCalendar
 import { generateCalendarDesign } from '/app.js';
 import { generateCarouselDesign } from '/carousel.js';
 import { generateMultiPageDesign } from '/multi-page.js';
+import { aiRequest } from '/src/ai-style.js';
 import { downloadPng, previewPngBlob } from '/src/export.js';
 import { showProcessing, hideProcessing } from '/src/processing.js';
 import { loadContentLibrary, createFolder, renameFolder, deleteFolder, assignFolder, setArchived, groupContentRows } from '/src/content-library.js';
@@ -14,6 +15,7 @@ import { loadContentLibrary, createFolder, renameFolder, deleteFolder, assignFol
 const labels = {
   ready: 'Ready',
   generating: 'Generating',
+  'reel-ready': 'Reel Ready',
   generated: 'Generated',
   failed: 'Failed',
   stale: 'Stale',
@@ -79,12 +81,198 @@ let carouselSlideIndex = 0;
 
 const sessionResults = new Map();
 
+const plannedCalendarFormat = row => row.contentFormat === 'ai_designer'
+  ? ({ single_image: 'single-image', carousel: 'carousel', multi_page: 'multi-page' }[row.aiDesignerPlan?.format] || 'single-image')
+  : row.contentFormat;
+const isPaginatedCalendarResult = row => ['carousel', 'multi-page'].includes(plannedCalendarFormat(row));
+const publishingCalendarResult = row => ({
+  ...row,
+  contentType: row.contentFormat === 'reel' ? 'video' : plannedCalendarFormat(row),
+  contentFormat: row.contentFormat === 'reel' ? 'reel' : plannedCalendarFormat(row),
+  ...(row.contentFormat === 'reel' ? { reelMediaRef: row.reelRenderRef || '' } : {})
+});
+
+const reelCalendarInput = row => {
+  const content = row.rawCopy || [row.headline, row.supportingCopy, row.cta].filter(Boolean).join('\n');
+  if (!content.trim()) throw new Error('Add a Reel concept or script before generating this Calendar item.');
+  const targets = [15, 30, 45, 60];
+  const requested = Number(row.reelDuration) || 30;
+  const targetDuration = targets.reduce((closest, value) => Math.abs(value - requested) < Math.abs(closest - requested) ? value : closest, 30);
+  return {
+    content: content.trim().slice(0, 8000),
+    targetDuration,
+    style: row.creativeDirection?.trim().slice(0, 400) || 'educational'
+  };
+};
+
+async function planCalendarReel(input) {
+  const response = await fetch('/api/reels/plan', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || 'Reel planning failed.');
+  return data.plan;
+}
+
+async function createCalendarReelProject(row, plan, input) {
+  await import('/reels.js');
+  return new Promise((resolve, reject) => {
+    document.dispatchEvent(new CustomEvent('reel:use-calendar-project', {
+      detail: {
+        calendarRowId: row.id,
+        title: row.headline,
+        content: input.content,
+        style: input.style,
+        plan,
+        audioMode: row.audioMode,
+        creativeDirection: row.creativeDirection,
+        completion: { resolve, reject }
+      }
+    }));
+  });
+}
+
+async function generateCalendarReel(row) {
+  const input = reelCalendarInput(row);
+  const plan = await planCalendarReel(input);
+  const created = await createCalendarReelProject(row, plan, input);
+  if (!created?.projectId || !created?.project?.scenes?.length) throw new Error('Reel project could not be created from the Calendar plan.');
+  return {
+    calendarStatus: 'reel-ready',
+    skipResultPersistence: true,
+    reelPlan: plan,
+    reelProject: created.project,
+    reelProjectId: created.projectId,
+    reelTotalDuration: created.totalDuration
+  };
+}
+
+async function openCalendarReel(row) {
+  if (!row.reelProject?.scenes?.length) {
+    calendarStatus.textContent = 'This Calendar Reel project is unavailable. Generate it again.';
+    return;
+  }
+  try {
+    await import('/reels.js');
+    await new Promise((resolve, reject) => {
+      document.dispatchEvent(new CustomEvent('reel:open-calendar-project', {
+        detail: { project: row.reelProject, completion: { resolve, reject } }
+      }));
+    });
+  } catch (error) {
+    calendarStatus.textContent = error.message || 'The Reel workspace could not be opened.';
+  }
+}
+
+const aiDesignerPlannerInput = row => ({
+  rawCopy: row.rawCopy || [row.headline, row.supportingCopy, row.cta].filter(Boolean).join('\n'),
+  creativeDirection: row.creativeDirection || row.ai?.direction || '',
+  format: 'auto',
+  textMode: row.textMode || 'auto',
+  pageCount: row.pageCount || row.slideCount || 0,
+  rewriteStrength: row.rewriteStrength || 'balanced',
+  referenceUsage: row.referenceUsage || 'none',
+  hasReferenceImage: false
+});
+
+const retainedAiDesignerPlan = plan => ({
+  format: plan.format,
+  recommendedFormat: plan.recommendedFormat,
+  recommendedTextMode: plan.recommendedTextMode,
+  formatReason: plan.formatReason,
+  textMode: plan.textMode,
+  headline: plan.headline,
+  subheadline: plan.subheadline,
+  body: plan.body,
+  cta: plan.cta,
+  designIntent: plan.designIntent,
+  layoutDirection: plan.layoutDirection,
+  visualDirection: plan.visualDirection,
+  slides: (plan.slides || []).map(slide => ({
+    page: slide.page,
+    role: slide.role,
+    headline: slide.headline,
+    body: slide.body,
+    cta: slide.cta,
+    layoutDirection: slide.layoutDirection,
+    visualDirection: slide.visualDirection
+  }))
+});
+
+const carouselFromAiDesignerPlan = plan => ({
+  id: `calendar-ai-designer-${Date.now()}`,
+  title: plan.headline,
+  description: plan.body || plan.subheadline,
+  style: 'minimal-editorial',
+  designMode: plan.textMode === 'full_ai' ? 'full-ai-artwork' : 'native',
+  slides: plan.slides.map((slide, order) => ({
+    type: slide.role,
+    headline: slide.headline,
+    body: slide.body,
+    cta: slide.cta,
+    order
+  }))
+});
+
+const multiPageFromAiDesignerPlan = plan => ({
+  id: `calendar-ai-designer-${Date.now()}`,
+  title: plan.headline,
+  description: plan.body || plan.subheadline,
+  direction: plan.visualDirection || plan.designIntent,
+  designMode: plan.textMode === 'full_ai' ? 'full-ai-artwork' : 'native',
+  pages: plan.slides.map((slide, order) => ({
+    headline: slide.headline,
+    supportingCopy: slide.body,
+    cta: slide.cta,
+    order
+  }))
+});
+
+async function generateAiDesignerCalendarRow(row) {
+  const response = await aiRequest('ai-designer-plan', aiDesignerPlannerInput(row));
+  const plan = retainedAiDesignerPlan(response?.plan || {});
+  if (!plan.format || !plan.headline) throw new Error('AI Designer did not return a usable plan.');
+
+  try {
+    let result;
+    if (plan.format === 'carousel') {
+      result = await generateCarouselDesign(carouselFromAiDesignerPlan(plan));
+    } else if (plan.format === 'multi_page') {
+      result = await generateMultiPageDesign(multiPageFromAiDesignerPlan(plan));
+    } else {
+      const input = calendarSingleImageInput({
+        ...row,
+        headline: plan.headline,
+        supportingCopy: plan.body || plan.subheadline,
+        cta: plan.cta,
+        style: plan.textMode === 'full_ai' ? 'openai-style' : row.style,
+        ai: {
+          ...row.ai,
+          direction: [row.ai?.direction, plan.visualDirection, plan.designIntent].filter(Boolean).join(' '),
+          renderMode: plan.textMode === 'full_ai' ? 'full-ai-artwork' : 'visual-native-text'
+        }
+      });
+      result = await generateCalendarDesign(input);
+    }
+    return { result, plan };
+  } catch (error) {
+    error.aiDesignerPlan = plan;
+    throw error;
+  }
+}
+
 const generateCalendarRow = row =>
   row.contentFormat === 'carousel'
     ? generateCarouselDesign(row.carousel)
     : row.contentFormat === 'multi-page'
       ? generateMultiPageDesign(row.multiPage)
-    : generateCalendarDesign(row);
+    : row.contentFormat === 'ai_designer'
+      ? generateAiDesignerCalendarRow(row)
+      : row.contentFormat === 'reel'
+        ? generateCalendarReel(row)
+      : generateCalendarDesign(row);
 
 const queue = createCalendarQueue(generateCalendarRow);
 
@@ -99,7 +287,8 @@ export function getSelectedRowsInOrderForCalendar() {
 function hasReview(row) {
   return Boolean(
     sessionResults.get(row.id)?.preview ||
-    row.resultRef
+    row.resultRef ||
+    row.reelProject?.scenes?.length
   );
 }
 
@@ -259,11 +448,7 @@ function rowElement(row) {
 
   formatBadge.className = 'calendar-format-badge';
   formatBadge.textContent =
-    row.contentFormat === 'carousel'
-      ? 'Carousel'
-      : row.contentFormat === 'multi-page'
-        ? 'Multi-Page'
-      : 'Single';
+    row.contentFormat === 'carousel' ? 'Carousel' : row.contentFormat === 'multi-page' ? 'Multi-Page' : row.contentFormat === 'ai_designer' ? 'AI Designer' : row.contentFormat === 'reel' ? 'Reel' : row.contentFormat === 'auto' ? 'Auto' : 'Single';
 
   format.append(formatBadge);
   if (row.folderId) { const folder = loadContentLibrary().folders.find(item => item.id === row.folderId); if (folder) { const badge = document.createElement('small'); badge.textContent = folder.name; format.append(badge); } }
@@ -285,7 +470,8 @@ function rowElement(row) {
 
   const primary = document.createElement('button');
   primary.type = 'button'; primary.className = 'calendar-mobile-primary';
-  if (value === 'generated') { primary.textContent = 'Review'; primary.onclick = () => { openReview(row); document.dispatchEvent(new Event('navigate:review')); }; }
+  if (row.contentFormat === 'reel' && ['reel-ready', 'generated'].includes(value)) { primary.textContent = value === 'generated' ? 'Review Reel' : 'Open Reel'; primary.onclick = () => openCalendarReel(row); }
+  else if (value === 'generated') { primary.textContent = 'Review'; primary.onclick = () => { openReview(row); document.dispatchEvent(new Event('navigate:review')); }; }
   else if (value === 'failed' || value === 'stale') { primary.textContent = 'Retry'; primary.onclick = () => runCalendarQueue(new Set([row.id]), 'Selected'); }
   else if (value === 'ready') { primary.textContent = 'Generate'; primary.onclick = () => runCalendarQueue(new Set([row.id]), 'Selected'); }
   else { primary.textContent = 'Edit'; primary.onclick = () => document.dispatchEvent(new CustomEvent('calendar:edit', { detail: { id: row.id, context: { source: 'CALENDAR', calendarItemId: row.id, contentType: row.contentFormat || 'single-image', resultRef: row.resultRef || '', designMode: row.carousel?.designMode || row.multiPage?.designMode || 'native', pageOrSlideIndex: 0, returnDestination: 'CALENDAR', row } } })); }
@@ -312,16 +498,14 @@ function rowElement(row) {
 
   const canReview =
     hasReview(row) ||
-    ['generated', 'stale', 'failed'].includes(value);
+    ['generated', 'reel-ready', 'stale', 'failed'].includes(value);
 
   if (canReview) {
     items.append(
-      menuItem('View design', () => {
+      menuItem(row.contentFormat === 'reel' ? 'Open Reel' : 'View design', () => {
+        if (row.contentFormat === 'reel') { openCalendarReel(row); return; }
         openReview(row);
-
-        document.dispatchEvent(
-          new Event('navigate:review')
-        );
+        document.dispatchEvent(new Event('navigate:review'));
       })
     );
   }
@@ -353,7 +537,7 @@ function rowElement(row) {
     );
   }
 
-  if (canReview && value === 'generated') {
+  if (canReview && value === 'generated' && row.contentFormat !== 'reel') {
     items.append(
       menuItem('Regenerate', () => {
         reviewId = row.id;
@@ -362,24 +546,19 @@ function rowElement(row) {
     );
   }
 
-  if (canReview) {
+  if (canReview && (row.contentFormat !== 'reel' || row.reelRenderRef)) {
     items.append(
       menuItem('Send to Publish', () =>
         document.dispatchEvent(
           new CustomEvent(
             'publishing:generated',
-            { detail: row }
+            { detail: publishingCalendarResult(row) }
           )
         )
       )
     );
 
-    items.append(
-      menuItem(
-        'Download PNG',
-        () => downloadRow(row)
-      )
-    );
+    if (row.contentFormat !== 'reel') items.append(menuItem('Download PNG', () => downloadRow(row)));
   }
 
   items.append(
@@ -705,8 +884,8 @@ async function openReview(row) {
   reviewDownload.disabled = true;
 
   reviewPreview.textContent =
-    row.contentFormat === 'carousel'
-      ? 'Carousel review will be added next.'
+    isPaginatedCalendarResult(row)
+      ? 'Loading ordered pages…'
       : 'Loading design…';
 
   reviewMeta.replaceChildren();
@@ -715,6 +894,7 @@ async function openReview(row) {
     ['Date', row.date],
     ['Content', row.headline],
     ['Style', human(row.style)],
+    ...(row.aiDesignerPlan ? [['AI Designer plan', `${human(plannedCalendarFormat(row))}${row.aiDesignerPlan.formatReason ? ` · ${row.aiDesignerPlan.formatReason}` : ''}`]] : []),
     [
       'Status',
       labels[normalizeStatus(row.status)]
@@ -751,7 +931,7 @@ async function openReview(row) {
     return;
   }
 
-  if (row.contentFormat === 'carousel') {
+  if (isPaginatedCalendarResult(row)) {
     renderCarouselReview(row, result);
     return;
   }
@@ -904,8 +1084,10 @@ async function regenerateReview() {
 
   const calendarReviewOperation = showProcessing({ title: 'Generating your designs…', message: 'Creating the selected Calendar content.' });
   try {
-    const result =
-      await generateCalendarDesign(calendarSingleImageInput(generating));
+    const generatedDesign =
+      await generateCalendarRow(generating);
+    const result = generatedDesign?.result || generatedDesign;
+    const plan = generatedDesign?.plan;
 
     const resultRef =
       await persistResult(row, result);
@@ -916,6 +1098,7 @@ async function regenerateReview() {
       generatedAt:
         new Date().toISOString(),
       error: null,
+      ...(plan ? { aiDesignerPlan: plan } : {}),
       resultRef:
         resultRef || row.resultRef
     };
@@ -1035,7 +1218,7 @@ document
           detail: { id: reviewId, context: row ? { source: 'CALENDAR', calendarItemId: row.id, contentType: row.contentFormat || 'single-image', resultRef: row.resultRef || '', designMode: row.carousel?.designMode || row.multiPage?.designMode || 'native', pageOrSlideIndex: 0, returnDestination: 'CALENDAR', row } : null }
         })
       );
-      if (!row || !['carousel', 'multi-page'].includes(row.contentFormat)) document.dispatchEvent(new Event('navigate:calendar'));
+      if (!row || !isPaginatedCalendarResult(row)) document.dispatchEvent(new Event('navigate:calendar'));
     }
   });
 
@@ -1083,7 +1266,7 @@ reviewDownload.addEventListener(
       await downloadPng(
         preview,
         result.style || row.style,
-        row.contentFormat === 'carousel'
+        isPaginatedCalendarResult(row)
           ? reviewFilename(row).replace(/\.png$/, '-slide-' + (carouselSlideIndex + 1) + '.png')
           : reviewFilename(row)
       );
@@ -1111,7 +1294,7 @@ reviewEditDesign.addEventListener(
       await resultFor(row);
 
     const carouselSlide =
-      row.contentFormat === 'carousel'
+      isPaginatedCalendarResult(row)
         ? result?.slides?.[carouselSlideIndex]
         : null;
 
@@ -1228,11 +1411,31 @@ document
       document.dispatchEvent(
         new CustomEvent(
           'publishing:generated',
-          { detail: row }
+          { detail: publishingCalendarResult(row) }
         )
       );
     }
   });
+
+document.addEventListener('reel:rendered', event => {
+  const detail = event.detail || {};
+  if (!detail.calendarRowId || !detail.render?.assetRef) return;
+  const nextRows = rows().map(row =>
+    row.id === detail.calendarRowId && row.reelProjectId === detail.projectId
+      ? {
+          ...row,
+          status: 'generated',
+          error: null,
+          generatedAt: new Date().toISOString(),
+          reelRenderRef: detail.render.assetRef,
+          reelRender: detail.render
+        }
+      : row
+  );
+  saveCalendar(nextRows);
+  calendarStatus.textContent = 'Reel render complete. It is ready for Publishing.';
+  render();
+});
 
 async function runCalendarQueue(
   ids,
@@ -1279,11 +1482,14 @@ async function runCalendarQueue(
         item => item.id === id
       );
 
+      const generatedResult = design?.result || design;
+      const plan = design?.plan;
+
       const resultRef =
-        row &&
+        row && !design?.skipResultPersistence &&
         await persistResult(
           row,
-          design
+          generatedResult
         );
 
       finalRows = finalRows.map(
@@ -1291,6 +1497,13 @@ async function runCalendarQueue(
           item.id === id
             ? {
                 ...item,
+                ...(plan ? { aiDesignerPlan: plan } : {}),
+                ...(design?.reelProject ? {
+                  reelProject: design.reelProject,
+                  reelProjectId: design.reelProjectId,
+                  reelPlan: design.reelPlan,
+                  reelTotalDuration: design.reelTotalDuration
+                } : {}),
                 resultRef:
                   resultRef ||
                   item.resultRef
